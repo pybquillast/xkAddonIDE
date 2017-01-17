@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Forms Test</title>
+</head>
+<body>
+<form action="action_page.php" method="get">
+    <fieldset>
+        <legend>Input Types</legend>
+        <label for="nm_checkbox">Checkbox</label>
+        <input type="checkbox" id="nm_checkbox" name="nm_checkbox" value="Checkbox"><br>
+        <label for="nm_color">Color</label>
+        <input type="color" id="nm_color" name="nm_color" value="Color"><br>
+        <label for="nm_date">Date</label>
+        <input type="date" id="nm_date" name="nm_date"><br>
+        <label for="nm_datetime">Datetime</label>
+        <input type="datetime" id="nm_datetime" name="nm_datetime"><br>
+        <label for="nm_datetimelocal">Datetimelocal</label>
+        <input type="datetime-local" id="nm_datetimelocal" name="nm_datetimelocal"><br>
+        <label for="nm_email">Email</label>
+        <input type="email" id="nm_email" name="nm_email"><br>
+        <label for="nm_file">File</label>
+        <input type="file" id="nm_file" name="nm_file" value="alex.com"><br>
+        <input type="hidden" name="nm_hidden" value="hidden_value"><br>
+        <label for="nm_image">Image</label>
+        <input type="image" id="nm_image" name="nm_image" src="https://i.ytimg.com/i/ToFY_IrJTEquiIH4YhU6OA/1.jpg"><br>
+        <label for="nm_month">Month</label>
+        <input type="month" id="nm_month" name="nm_month" value="5"><br>
+        <label for="nm_number">Number</label>
+        <input type="number" id="nm_number" name="nm_number" value="5"><br>
+        <label for="nm_password">Password</label>
+        <input type="password" id="nm_password" name="nm_password" value="5"><br>
+        <label for="nm_radio">Radio</label>
+        <input type="radio" id="nm_radio" name="nm_radio" value="5"><br>
+        <label for="nm_range">Range</label>
+        <input type="range" id="nm_range" name="nm_range" value="5"><br>
+        <label for="nm_reset">Reset</label>
+        <input type="reset" id="nm_reset" name="nm_reset" value="5"><br>
+        <label for="nm_search">Search</label>
+        <input type="search" id="nm_search" name="nm_search" value="5"><br>
+        <label for="nm_tel">Tel</label>
+        <input type="tel" id="nm_tel" name="nm_tel" value="5"><br>
+        <label for="nm_text">Text</label>
+        <input type="text" id="nm_text" name="nm_text" value="Esto es un texto"><br>
+        <label for="nm_time">Time</label>
+        <input type="time" id="nm_time" name="nm_time"><br>
+        <label for="nm_url">Url</label>
+        <input type="url" id="nm_url" name="nm_url"><br>
+        <label for="nm_week">Week</label>
+        <input type="week" id="nm_week" name="nm_week"><br>
+
+
+
+    </fieldset>
+    <fieldset>
+        <legend>Personal information:</legend>
+        First name:<br>
+        <input type="text" name="firstname" value="Mickey"><br>
+        Last name:<br>
+        <input type="text" name="lastname" value="Mouse"><br><br>
+        <textarea name="message" rows="10" cols="30">
+            The cat was playing in the garden.
+        </textarea><br>
+        <label for="male">Male</label>
+        <input type="radio" name="gender" id="male" value="male"><br>
+        <label for="female">Female</label>
+        <input type="radio" name="gender" id="female" value="female"><br>
+        <label for="other">Other</label>
+        <input type="radio" name="gender" id="other" value="other"><br><br>
+    </fieldset>
+    <fieldset>
+        <legend>Tipo de Carros:</legend>
+        <select name="cars">
+            <option value="volvo">Volvo</option>
+            <option value="saab">Saab</option>
+            <option value="fiat">Fiat</option>
+            <option value="audi">Audi</option>
+        </select><br>
+    </fieldset>
+    <fieldset>
+        <legend>Otra informacion:</legend>
+        <label for="browsers">Browsers</label>
+        <input list="browsers" name="browsers">
+        <datalist id="browsers">
+            <option value="Internet Explorer">
+            <option value="Firefox">
+            <option value="Chrome">
+            <option value="Opera">
+            <option value="Safari">
+        </datalist>
+        <br>
+    </fieldset>
+    <br><br>
+    <input type="submit" value="Submit">
+
+</form>
+</body>
+</html>
