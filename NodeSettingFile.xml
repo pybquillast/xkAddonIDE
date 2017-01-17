@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+  <category label="thread">
+    <setting type="lsep" label ="Attributes:    "/>
+    <setting id="name" type="text" label="Name:   " default="" enable="true"/>
+    <setting id="plainnode" type="bool" label="Plain this node:   " default="false"/>
+    <setting type="lsep" label ="Basic Parameters:    "/>
+    <setting id="url" type="text" label="URL:   " default=""/>
+    <setting id="regexp" type="text" label="Regexp:   " default=""/>
+    <setting id="compflags" type="text" label="Compilation Flags:   " default=""/>
+    <setting id="headregexp" type="text" label="Header Regexp:   " default=""/>
+    <setting id="nextregexp" type="text" label="Next Regexp:   " default=""/>
+    <setting id="upmenu" type="enum" label="Send output To:   " values=""  enable="!eq(-9,'media')"/>
+    <setting type="lsep" label ="Icons:    "/>
+	<setting id="icondefflag" type="bool" label="Provide default icon:   " default="false"/>
+	<setting id="labeldefflag" type="bool" label="Provide default label:   " default="false"/>
+    <setting id="iconflag" type="bool" label="Use custom icons:   " default="false"/>
+    <setting id="iconfolder" type="folder" label="Icons folder:   " default="" enable="eq(-1,true)"/>
+    <setting id="iconimage" type="text" label="Icon names:   " default="" enable="eq(-2,true)"/>
+    <setting id="otherparameters" type="optionlst" default="" label="Other Parameters" columnsheadings = "Parameter, Value" />
+    <setting id="contextmenus" type="optionlst" default="" label="Context menu:    " columnsheadings = "Label, Command" />
+    <setting id="onlycontext" type="bool" label="Show only this context menu:   " default="false"/>
+  </category>
+  <category label="list">
+    <setting type="lsep" label ="Attributes:    "/>
+    <setting id="name" type="text" label="Name:   " default=""  enable="!eq(-0,'rootmenu')"/>
+    <setting id="codenode" type="bool" label="Code this node:   " default="true"/>
+    <setting id="upmenu" type="enum" label="Receives input from:   " values=""  enable="!eq(-2,'rootmenu')"/>
+    <setting type="lsep" label ="Icons:    "/>
+    <setting id="iconflag" type="bool" label="Use custom icons:   " default="false"/>
+    <setting id="iconimage" type="text" label="Icon names:   " default="" enable="eq(-1,true)"/>
+    <setting id="contextmenus" type="optionlst" default="" label="Context menu:    " columnsheadings = "Label, Command" />
+    <setting id="onlycontext" type="bool" label="Show only this context menu:   " default="false"/>
+    <setting id="otherparameters" type="optionlst" default="" label="Parameters:    " columnsheadings = "Parameter, Value" />
+  </category>
+</settings>

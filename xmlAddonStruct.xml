@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<structure path="addon_id">
+    <folder id="addon_id" optional="false" path="">
+        <file id="addon_module" optional="false" />
+        <file id="addon_xml" name="addon.xml" optional="false" />
+        <file id="addon_icon" name="icon.png" optional="true"  />
+        <file id="addon_fanart" name="fanart.jpg" optional="true" />
+        <file id="addon_changelog" name="changelog.txt" optional="true" />
+        <file id="addon_license" name="licence.txt" optional="true" />
+        <folder id="addon_resources" optional="true" path="resources">
+            <file id="addon_settings" optional="true" />
+            <folder id="addon_resources" name="language" optional="true" path="resources/language" />
+            <folder id="addon_resources" name="lib" optional="true" path="resources/lib" />
+            <folder id="addon_resources" name="data" optional="true" path="resources/data" />
+            <folder id="addon_resources" name="media" optional="true" path="resources/media" />
+        </folder>
+    </folder>
+</structure>

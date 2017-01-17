@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+  <category label="Settings">
+  	<setting id="user-agent" type="text" label="User Agent:   " default=""/>
+	<setting id="working-dir" type="folder" label="Default directory:   " default=""/>
+    <setting id="cookie-jar" type="text" label="Cookie File:   " default="cookies.lwp"/>
+    <setting type="lsep" label ="Output"/>
+  	<setting id="flag-output" type="bool" label ="Use output: " default="false"/>
+  	<setting id="output" type="text" label="Output to:   " default="output.txt" enable="eq(-1,true)"/>
+  	<setting id="remote-name" type="bool" label ="Use remote name: " default="false" enable="eq(-2,true)"/>
+  	<setting id="remote-header-name" type="bool" label ="Use remote header name: " default="false" enable="eq(-3,true)"/>
+    <setting type="lsep" label ="Switches:    "/>
+  	<setting id="switch_location" type="bool" label ="Redirection" default="false"/>
+  	<setting id="switch_include" type="bool" label ="Include log" default="false"/>
+  	<setting id="switch_post301" type="bool" label ="Post301" default="false"/>
+  	<setting id="switch_post302" type="bool" label ="Post302" default="false"/>
+  	<setting id="switch_post303" type="bool" label ="Post303" default="false"/>
+    <setting type="lsep" label =""/>
+  	<setting id="flag-proxy" type="bool" label ="Use Proxy: " default="false"/>
+  	<setting id="proxy" type="text" label="Proxy:   " default="" enable="eq(-1,true)"/>
+  	<setting id="proxy_auth" type="labelenum" label="Proxy Auth:   " default="0" values="No authentication|Basic|Digest" enable="eq(-2,true)"/>
+  	<setting id="proxy_user" type="text" label="User:   " default="" enable="eq(-3,true)"/>
+  	<setting id="proxy_password" type="text" label="Password:   " default="" enable="eq(-4,true)"/>
+  </category>
+</settings>
