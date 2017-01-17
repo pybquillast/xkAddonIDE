@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="addon_id" name="addon_name" version="addon_version" provider-name="addon_provider">
+  <requires>
+    <import addon="{0}" version="{1}" optional="{2}"/>
+  </requires>
+  <extension point="xbmc.python.pluginsource" library="addon_module">
+    <provides>addon_provides</provides>
+  </extension>
+  <extension point="xbmc.addon.metadata">
+    <summary lang="en">addon_summary</summary>
+    <description lang="en">addon_description</description>
+    <disclaimer lang="en">addon_disclaimer</disclaimer>
+    <language>addon_language</language>
+    <platform>addon_platform</platform>
+    <license>addon_license</license>
+    <forum>addon_forum</forum>
+    <website>addon_website</website>
+    <email>addon_email</email>
+    <source>addon_source</source>
+  </extension>
+</addon>
