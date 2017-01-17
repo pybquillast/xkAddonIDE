@@ -1,0 +1,27 @@
+<?xml version='1.0' encoding='utf-8'?>
+<addon id="script.hello.world" name="Hello World" provider-name="Dev1, Dev2" version="0.0.1">
+    <requires>
+        <import addon="xbmc.python" version="2.1.0">
+            </import><import addon="script.module.elementtree" version="1.2.7">
+            </import><import addon="script.module.simplejson" optional="False" version="2.0.10">
+            </import></requires><extension library="default" point="xbmc.python.pluginsource">
+        <provides>
+            audio video
+        </provides></extension><extension point="xbmc.addon.metadata">
+        <summary lang="en">
+            </summary><description lang="en">
+            </description><platform>
+            All
+        </platform><license>
+            GENERAL PUBLIC LICENSE. Version  2, June 1991
+        </license><forum>
+            http://www.myaddonwebsite.com/forum.php?thread=12345
+        </forum><website>
+            http://www.myaddonwebsite.com/
+        </website><source>
+            http://github.com/someone/source/myaddon
+        </source><email>
+            foo@bar.com
+        </email><disclaimer>
+            Feel free to use this script. For information visit the wiki
+        </disclaimer></extension></addon>

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+  <category label="Display">
+    <setting id="addon_id" type="enum" label="Show this number of recent documents:   " default="5" values="0|1|2|3|4|5|6|7|8|9|10"/>
+    <setting id="addon_name" type="text" label="Name:   " default="xbmcIDEdefault"/>
+    <setting id="addon_version" type="text" label="Version:   " default="1.0.0.0.0"/>
+    <setting id="addon_provider" type="text" label="Provider's Name:   " default="xbmcAddonIDE"/>
+    <setting id="addon_module" type="text" label="Initial script:   " default="default.py"/>
+    <setting type="lsep" label ="Provides:    "/>
+    <setting id="addon_video" type="bool" label ="Video" default="true"/>
+    <setting id="addon_music" type="bool" label ="Audio" default="false"/>
+    <setting id="addon_picture" type="bool" label ="Image" default="false"/>
+    <setting id="addon_program" type="bool" label ="Executable" default="false"/>
+    <setting id="addon_requires" type="optionlst" default="xbmc.python,2.1.0,|script.module.urlresolver,2.4.0," label="Requires" columnsheadings = "Description, Version, Optional" />  
+  </category>
+  <category label="Metadata">
+    <setting id="addon_summary" type="text" label="Summary:   " default="Your summary here"/>
+    <setting id="addon_description" type="text" label="Description:   " default="Your description here"/>
+    <setting id="addon_disclaimer" type="text" label="Disclaimer:   " default=""/>
+    <setting id="addon_language" type="text" label="Language:   " default=""/>
+    <setting id="addon_platform" type="text" label="platform:   " default=""/>
+    <setting id="addon_license" type="text" label="License:   " default=""/>
+    <setting type="lsep" label ="Contact Data:    "/>
+    <setting id="addon_forum" type="text" label="Forum:   " default=""/>
+    <setting id="addon_website" type="text" label="Website:   " default=""/>
+    <setting id="addon_email" type="text" label="Email:   " default=""/>
+    <setting id="addon_source" type="text" label="Source:   " default=""/>
+  </category>
+  <category label="resources">
+    <setting id="addon_icon" type="file" label="Icon:   " default=""/>
+    <setting id="addon_fanart" type="file" label="Fanart:   " default=""/>
+    <setting id="addon_license" type="file" label="License:   " default=""/>
+    <setting id="addon_changelog" type="file" label="Changelog" default="" />
+    <setting id="addon_resources" type="optionlst" default="basicFunc.py,resources/lib,True,basicFunc.py" label="Addon aditional resources" columnsheadings = "File, Location, Editable, Source" />
+  </category>
+  <category label="Directories">
+    <setting id="script_export" type="folder" label="Export:   " default="c:/basura"/>
+  </category>
+</settings>
