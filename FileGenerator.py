@@ -290,8 +290,13 @@ class vrtDisk:
     def getPathContent(self, path):
         type, filename = self._getTypeSource(path)
         if type == 'file':
-            with open(filename, 'rb') as f:
+            if os.path.splitdrive(filename)[0]:
+                with open(filename, 'rb') as f:
+                    source = f.read()
+            else:
+                f = urllib.urlopen(filename)
                 source = f.read()
+                f.close()
         elif type == 'genfile':
             file_id = filename
             fgen = self.getFileGenerator()

@@ -486,23 +486,24 @@ class XbmcAddonIDE(tk.Toplevel):
         activeView = self.activeViewIndx.get()
         if activeView == 'Design': activeView = self.designTab.get()
         master = self.menuBar[menuId]
-        frstIndx, lstIndx = 8,  tk.END
+        frstIndx, lstIndx = 7,  tk.END
         master.delete(frstIndx, lstIndx)
         if activeView == 'Design':
+            master.add('separator')
             for mLabel in ['edit', 'get', 'tools']:
                 menuLabel = menuId + '_' + mLabel
                 master.add('cascade',
                                label = '{:30s}'.format(mLabel.capitalize()),
                                menu = self.menuBar[menuLabel])
-            master.add('separator')
         elif activeView in ['Code', 'Addon Explorer']:
+            master.add('separator')
             mLabel= 'code'
             menuLabel = menuId + '_' + mLabel
             master.add('cascade',
                            label = '{:30s}'.format(mLabel.capitalize()),
                            menu = self.menuBar[menuLabel])
-            master.add('separator')
         if self.fileHistory:
+            master.add('separator')
             for k, filename in enumerate(self.fileHistory):
                 flabel = os.path.basename(filename)
                 master.add('command',

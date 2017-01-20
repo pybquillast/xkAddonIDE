@@ -14,7 +14,7 @@ import threading
 import urlparse
 import webbrowser
 from functools import partial
-from wsgiref.simple_server import make_server
+from wsgiref.simple_server import WSGIRequestHandler, make_server
 from wsgiref.util import is_hop_by_hop
 import urllib2
 import httplib
@@ -25,6 +25,14 @@ import xml.etree.ElementTree as ET
 import FileGenerator
 import KodiScriptImporter as ksi
 
+class kodiSrvWSGIRequestHandler(WSGIRequestHandler):
+
+    def log_message(self, format, *args):
+        import xbmc
+        strMessage = "%s - [%s] %s" % (self.client_address[0],
+                                         self.log_date_time_string(),
+                                         format%args)
+        xbmc.log(strMessage)
 
 def isProxyRequest(environ):
     url = environ['PATH_INFO']
@@ -147,10 +155,10 @@ def application (environ, start_response, server=None):
 class KodiServer(ksi.Runner):
 
     def __init__(self, importer):
-        self.loggerBuffer = StringIO.StringIO()
+        self.loggerBuffer = loggerBuffer = StringIO.StringIO()
         self.vrtDisk = FileGenerator.mountVrtDisk()
         importer.redefBuiltins = {'open':self.vrtDisk.open}
-        ksi.Runner.__init__(self, importer, self.loggerBuffer)
+        ksi.Runner.__init__(self, importer, loggerBuffer)
         self.buffer = ''
         self.testId = None
 
@@ -269,12 +277,15 @@ class KodiServer(ksi.Runner):
                 url = 'plugin://' + addonId + '/?'
                 name = addon.getAddonInfo('name')
                 if addonId == self.testId:
-                    name = '[COLOR red]' + name + ' (test mode)[/COLOR]'
+                    name = ' [COLOR red]' + name + ' (test mode)[/COLOR]'
                 listitem = xbmcgui.ListItem(label = name , iconImage = addon.getAddonInfo('icon'))
                 listitem.setProperty('fanart_image', addon.getAddonInfo('fanart'))
                 kwargs = {'handle':0, 'url':url, 'listitem':listitem._properties, 'isFolder':True, 'totalItems':0}
                 self.answ.append(kwargs)
             self.answ.sort(key=lambda x: x['listitem']['label'].lower())
+            if self.answ:
+                label = self.answ[0]['listitem']['label']
+                self.answ[0]['listitem']['label'] = label.strip()
             content = self.answ
             body += self.fillListBox(content)
             self.answ = None
@@ -322,7 +333,8 @@ def runServer(kodi = '', kodi_home = '', server_address=('localhost', 5000), sta
     httpd = make_server(
         server_address[0],  # The host name
         server_address[1],  # A port number where to wait for the request
-        wsgiApp  # The application object name, in this case a function
+        wsgiApp,  # The application object name, in this case a function
+        handler_class=kodiSrvWSGIRequestHandler
     )
     srvThread = threading.Thread(target=httpd.serve_forever)
     if startBrowser:

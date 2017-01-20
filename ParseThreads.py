@@ -83,20 +83,27 @@ class RegexpBar(tk.Frame):
         self.anchorPos = []
 
         navFrame = tk.Frame(frame1)
-        navFrame.pack(side=tk.LEFT)
-        self.butLast = tk.Button(navFrame, image=lstIcon, state = tk.DISABLED, font = self.customFont, text = "L", command = lambda: self.extreme('>>'))
+        navFrame.pack(side=tk.RIGHT)
+        self.leftWing = leftWing = tk.Frame(navFrame)
+        leftWing.pack(side=tk.LEFT)
+        self.rightWing = rightWing = tk.Frame(navFrame)
+        rightWing.pack(side=tk.RIGHT)
+
+        self.butLast = tk.Button(rightWing, image=lstIcon, font = self.customFont, text = "L", command = lambda: self.extreme('>>'))
         self.butLast.pack(side = tk.RIGHT)
-        self.butNext = tk.Button(navFrame, image=nxtIcon, state = tk.DISABLED, font = self.customFont, text = ">", command = self.nextMatch)
+        self.butNext = tk.Button(rightWing, image=nxtIcon, font = self.customFont, text = ">", command = self.nextMatch)
         self.butNext.pack(side = tk.RIGHT)
-        self.butAnchor = tk.Checkbutton(navFrame, image=anchorIcon, variable=self.anchor, indicatoron=0, font = self.customFont, text = "A", command = self.onAnchor)
-        self.butAnchor.pack(side = tk.RIGHT, fill=tk.Y)
-        self.butPrev = tk.Button(navFrame, image=prvIcon, state = tk.DISABLED, font = self.customFont, text = "<", command = self.prevMatch)
+        self.matchLabel = tk.Label(navFrame, font = self.customFont, text = "")
+        self.matchLabel.pack(side = tk.LEFT)
+        self.butPrev = tk.Button(leftWing, image=prvIcon, font = self.customFont, text = "<", command = self.prevMatch)
         self.butPrev.pack(side = tk.RIGHT)
-        self.butFirst = tk.Button(navFrame, image=frstIcon, state = tk.DISABLED, font = self.customFont, text = "F", command = lambda: self.extreme('<<'))
+        self.butFirst = tk.Button(leftWing, image=frstIcon, font = self.customFont, text = "F", command = lambda: self.extreme('<<'))
         self.butFirst.pack(side = tk.RIGHT)
 
+        self.butAnchor = tk.Checkbutton(frame1, image=anchorIcon, variable=self.anchor, indicatoron=0, font = self.customFont, text = "A", command = self.onAnchor)
+        self.butAnchor.pack(side = tk.LEFT, fill=tk.Y)
         self.butKeyMaker = tk.Button(frame1, text = "ZoomIn", command = self.zoomInOut)
-        self.butKeyMaker.pack(side = tk.RIGHT, padx=4)
+        self.butKeyMaker.pack(side = tk.LEFT, padx=4, fill=tk.Y)
         self.cbIndex = tk.StringVar()
         tk.Label(frame1, textvariable = self.cbIndex).pack(side = tk.LEFT)
         self.regexPattern = tk.StringVar()
@@ -115,8 +122,6 @@ class RegexpBar(tk.Frame):
         self.entry.bind('<FocusOut>', self.onFocusEvent)
         self.entry.bind('<<ComboboxSelected>>', self.getPatternMatch)
 
-        self.matchLabel = tk.Label(frame1, font = self.customFont, text = "")
-        self.matchLabel.pack(side = tk.LEFT)
 
         frame15 = tk.Frame(self)
         frame15.pack(fill = tk.X)
@@ -132,17 +137,14 @@ class RegexpBar(tk.Frame):
             chkbutt.pack(side = tk.LEFT)
 
         frame3 = tk.Frame(self)
-        # frame3.pack(fill = tk.X)
         cmbbxValues = ['[^X]+', '.+?', r'\w+', r'\W+?', r'(?P=<keyName>)']
         self.cmbbxPattern = ttk.Combobox(frame3, font = self.customFont, values = cmbbxValues)
         self.cmbbxPattern.pack(side=tk.LEFT, fill = tk.X )
         cmbbxIntVar = tk.IntVar()
-#         cmbbxIntVar.trace('w', self.reggexpVar)
         self.cmbbxIntVar = cmbbxIntVar
         for k, elem in enumerate(['Pattern', 'Key']):
             boton = tk.Radiobutton(frame3, text = elem, width = 15, value = k, variable = cmbbxIntVar)
             boton.pack(side = tk.LEFT)
-        cmbbxIntVar = 0
 
         cmbbxValues = ['url', 'label', 'iconImage', 'thumbnailImage', 'SPAN', 'SEARCH', 'NXTPOSINI']
         self.cmbbxKey = ttk.Combobox(frame3, font = self.customFont, values = cmbbxValues)
@@ -477,7 +479,9 @@ class RegexpBar(tk.Frame):
         tagColor = ['evenMatch', 'oddMatch', 'actMatch', 'group', 'hyper']
         for match in tagColor:
             self.textWidget.tag_remove(match, tagIni, tagFin)
-        self.matchLabel.config(text='')
+        for button in [self.leftWing, self.rightWing]:
+            button.pack_forget()
+        self.matchLabel.config(text='', bg = 'SystemButtonFace')
         items = self.tree.get_children()
         self.tree.delete(*items)
         map(self.textWidget.mark_unset, items)
@@ -555,8 +559,14 @@ class RegexpBar(tk.Frame):
                 self.messageVar.set(args[0])
                 self.matchLabel.config(text = 'Error', bg = 'red')
                 btState = tk.DISABLED
-            for button in [self.butFirst, self.butLast, self.butNext, self.butPrev]:
-                button.config(state=btState)
+
+            if btState == tk.DISABLED and self.leftWing.winfo_ismapped():
+                for button in [self.leftWing, self.rightWing]:
+                    button.pack_forget()
+            elif btState == tk.NORMAL and not self.leftWing.winfo_ismapped():
+                self.matchLabel.pack_forget()
+                for button in [self.leftWing, self.matchLabel, self.rightWing]:
+                    button.pack(side=tk.LEFT)
         if k > 0 or not self.queue.empty():
             if self.activeCallBack:
                 idAfter = self.activeCallBack.pop()
@@ -650,7 +660,6 @@ class NavigationBar(tk.Frame):
         bp = browser.result
         self.browserParam = bp
         self.initNetwork()
-
 
     def initNetwork(self):
         bp = self.browserParam
@@ -1417,11 +1426,11 @@ class RegexpFrame(tk.Frame):
                 params = xbmcThreads.parseThreads[elem]['params']
                 listaDisc.extend([(disc, elem) for key, disc in params.items() if key.startswith(discrim)])
             discrimDict = dict(listaDisc)
-            if discrim == 'urlout':
+            if discrim.startswith('urlout'):
                 toTest = urlout
-            elif discrim == 'urlin':
+            elif discrim.startswith('urlin'):
                 toTest = self.urlFrame.getActiveUrl()
-            elif discrim == 'option':
+            elif discrim.startswith('option'):
                 iid = self.regexBar.getBorderTags('current')[0][1:]
                 toTest = str(int(iid, 16) - 1)
             else:
@@ -1497,7 +1506,7 @@ class RegexpFrame(tk.Frame):
                 rgxNode = theValues[actpos][2]
         else:               # Cuando se trata de un List Node
             rgfrm.cbIndex.set('')
-            self.regexBar.matchLabel.config(text='')
+            self.regexBar.removeTags('1.0', 'end')
             query = urlparse.urlsplit(url).query
             query = dict(urlparse.parse_qsl(query))
             activeKnotId = query['menu']

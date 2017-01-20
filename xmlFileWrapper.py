@@ -11,6 +11,7 @@ import os
 from PIL import Image, ImageTk
 import menuThreads
 import ParseThreads
+import CustomRegEx
 from OptionsWnd import scrolledFrame
 
 
@@ -28,20 +29,25 @@ class xmlFileWrapper():
             nonDefaultValues = kwargs['nonDefaultValues']
         elif kwargs.has_key('hasNonDefaultFile'):
             if kwargs['hasNonDefaultFile']:
-                dirname, basename = os.path.split(xmlFile)
-                basename = 'nDSF_' + basename
-                self.nonDefaultFile =nonDefaultFile = os.path.join(dirname, basename)
+                prefix, suffix = os.path.splitext(xmlFile)
+                self.nonDefaultFile = nonDefaultFile = prefix + '_nDP' + suffix
                 if os.path.exists(nonDefaultFile):
                     with open(nonDefaultFile, 'rb') as fp:
-                        nonDefaultValues = json.load(fp)
+                        content = fp.read()
+                    pattern = r'(?#<setting id=id value=value>)'
+                    nonDefaultValues = dict(CustomRegEx.findall(pattern, content))
         self.setNonDefaultParams(nonDefaultValues)
         self.setActivePaneIndx()
 
     def save(self):
         if hasattr(self, 'nonDefaultFile'):
+            content = '<?xml version="1.0" encoding="utf-8" standalone="yes"?>'
+            content += '\n<settings>\n    '
+            content += '\n    '.join(map(lambda x: '<setting id="%s" value="%s" />' % x, self.settings.items()))
+            content += '\n</settings>'
             with open(self.nonDefaultFile, 'wb') as fp:
-                json.dump(self.settings, fp)
-        
+                fp.write(content)
+
     def getVer(self):
         return self.ver
     

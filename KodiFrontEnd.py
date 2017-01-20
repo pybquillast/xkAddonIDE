@@ -53,6 +53,8 @@ class KodiFrontEnd(tk.Frame):
         self.tempDir = tempfile.mkdtemp()
         self.imgDwnThread = None
         self.runThread = False
+        self.selImg = []
+        self.idAfter = None
 
     def destroy(self):
         shutil.rmtree(self.tempDir)
@@ -99,7 +101,13 @@ class KodiFrontEnd(tk.Frame):
             texto = '\nNO INFO LABELS'
 
         self.message.set(texto)
+        with mutex:
+            if self.idAfter:
+                self.after_cancel(self.idAfter)
+        self.getSelImagen(listitem, mutex)
 
+
+    def getSelImagen(self, listitem, mutex):
         with mutex:
             filePtrs = [self.fanart, self.icon, self.thumbnail]
         for k, iProperty in enumerate(['fanart_image', 'iconimage', 'thumbnailimage']):
@@ -129,12 +137,18 @@ class KodiFrontEnd(tk.Frame):
             if bFlag:
                 with mutex:
                     filePtrs[k].pack_forget()
+                    if not self.selImg or self.selImg[-1] != (iProperty, fileName):
+                        self.selImg.append((iProperty, fileName))
+                    if self.idAfter:
+                        self.after_cancel(self.idAfter)
+                    self.idAfter = self.after(100, self.getSelImagen, *(listitem, mutex))
             else:
                 im = Image.open(outfile)
                 self.imageVar[k] = ImageTk.PhotoImage(im)
                 with mutex:
                     filePtrs[k].config(image = self.imageVar[k])
                     filePtrs[k].pack(fill=tk.BOTH, expand=tk.YES)
+
 
     def initFrameExec(self, refreshFlag=False):
         self.setTestPlugin()
@@ -178,7 +192,7 @@ class KodiFrontEnd(tk.Frame):
         option = self.options[index]
         selItem, strDump = self.toHistory(index, option)
         if strDump == '':
-            if option['url'].find('section') != -1:
+            if option['url'].find('section=header') != -1 or option['url'].find('section=footer') != -1:
                 option['url'] = self.showMenuOptions(option['url'])
             url = 'http://%s:%s/' % self.server_address + option['url']
             self.getUrlData(url, self.processUrl, 'Getting Folder Data')
@@ -249,6 +263,8 @@ class KodiFrontEnd(tk.Frame):
                         self.clipboard_clear()
                         self.clipboard_append(vrtFolder['videoUrl'])
                 else:
+                    import xbmc
+                    xbmc.log(str(vrtFolder['error']), xbmc.ERROR)
                     tkMessageBox.showerror('Error', 'ERROR, please check log file')
         finally:
             self.vrtFolder = None
@@ -260,16 +276,21 @@ class KodiFrontEnd(tk.Frame):
 
     def getVrtFolderImages(self, imageList, imgSizes, mutex):
         image_keys = ['fanart_image', 'iconimage', 'thumbnailimage']
-        k = 0
+        k = -1
         while 1:
             with mutex:
-                bFlag = self.runThread and k < len(imageList)
+                bFlag = self.runThread
+                if bFlag:
+                    if self.selImg:
+                        toProcess = self.selImg.pop()
+                    else:
+                        k += 1
+                        bFlag = k < len(imageList)
+                        if bFlag: toProcess = imageList[k]
             if not bFlag: break
-            imgType, image = imageList[k]
+            imgType, image = toProcess
             ndx = image_keys.index(imgType)
             imgSize = imgSizes[ndx]
-
-            k += 1
             key = '%s_%sx%s' % (image, imgSize[0], imgSize[1])
             m = hashlib.md5()
             try:
@@ -435,6 +456,7 @@ class KodiFrontEnd(tk.Frame):
         if self.imgDwnThread and self.imgDwnThread.isAlive():
             self.imgDwnThread.join()
         self.runThread = True
+        self.selImg = []
         self.imgDwnThread = threading.Thread(target=self.getVrtFolderImages, name='imgDownloader', args=(imageList, imgSizes, self.mutex))
         self.imgDwnThread.start()
 

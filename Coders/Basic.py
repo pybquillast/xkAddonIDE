@@ -110,9 +110,9 @@ class CoderParser:
                   'args = urlparse.parse_qs(sys.argv[2][1:])',
                   'xbmcplugin.setContent(addon_handle, \'movies\')',
                   '',
-                  'menu = args.get(\'menu\', [\'rootmenu\'])',
-                  '',
-                  'menuItems = eval(menu[0] + \'()\')',
+                  'menu = args.get(\'menu\', [\'rootmenu\'])[0]',
+                  'menuFunc = globals()[menu]',
+                  'menuItems = menuFunc()',
                   'if menuItems: makeXbmcMenu(addon_handle, base_url, menuItems)    ',
                   '']
         return '\n'.join(FOOTER)
@@ -159,7 +159,7 @@ class CoderParser:
             iconList = '["' + '", "'.join(menuIcons) + '"]'
             sourceCode += INDENT + 'iconList = ' + iconList
             sourceCode += INDENT + 'for k, elem in enumerate(menuContent):'
-            sourceCode += INDENT + '\t' + 'icon = iconList[min(k, len(iconList))]'
+            sourceCode += INDENT + '\t' + 'icon = iconList[min(k, len(iconList) - 1)]'
             sourceCode += INDENT + '\t' + 'elem[1]["iconImage"] = os.path.join(_media, icon)'
         sourceCode += INDENT + 'return menuContent'
         return sourceCode
@@ -346,19 +346,27 @@ def <nodeId>():
             searchLabel, searchId = map(lambda x: x.strip(), elem.split('*'))
             menuContent.append([{'searchid':searchId, 'menu': '<nodeId>'}, {'isFolder': True, 'label': '<nodeId> by ' + searchLabel}, None])
         return menuContent
+    import re
     import xml.etree.ElementTree as ET
-    searchId     = args.get('searchid', ['all'])[0]
+    srchUrl = getRegexFor("<nodeId>", dir=_data)[1]
+    srchUrl = srchUrl[len('(?#<SEARCH>)'):]
+    searchId     = args.get('searchid', [None])[0]
+    if searchId is None: searchId = re.search(r'(?<=[?&])([^=]+)=<search>', srchUrl).group(1)
     savedsearch = xbmc.translatePath('special://profile')
     savedsearch = os.path.join(savedsearch, 'addon_data', '<addon_id>','savedsearch.xml')
     root = ET.parse(savedsearch).getroot() if os.path.exists(savedsearch) else ET.Element('searches')
 
+    existsSrch = root.findall('.//search')
+    existsSrch = [elem for elem in existsSrch if elem.get("searchnode") == "<nodeId>" and elem.get("searchid") == searchId]
     if not args.has_key("tosearch") and os.path.exists(savedsearch):
-        existsSrch = root.findall("search")
-        if searchId != "all":
-            existsSrch = [elem for elem in existsSrch if elem.get("searchid") == searchId]
         menuContent = []
         for elem in existsSrch:
-           menuContent.append([{'menu':elem.get('menu'), 'url':elem.get('url')}, {'isFolder': True, 'label': elem.get('tosearch')}, None])
+            searchid = elem.get('searchid')
+            tosearch = urllib.quote_plus(elem.get('tosearch'))
+            toSearch = "%s=%s" % (searchid, tosearch)
+            pattern = r'(?<=[?&])%s=.*?(?=$|&)' % searchid
+            url = re.sub(pattern, toSearch, srchUrl)
+            menuContent.append([{'menu':elem.get('menu'), 'url':url}, {'isFolder': True, 'label': elem.get('tosearch')}, None])
         if menuContent:
             menuContent.insert(0,[{'menu':'<nodeId>', 'tosearch':'==>', 'searchid':searchId}, {'isFolder': True, 'label': 'Search by ' + searchId}, None])
             return menuContent
@@ -367,13 +375,17 @@ def <nodeId>():
     kb.doModal()
     if not (kb.isConfirmed()):return EMPTYCONTENT
     srchLabel = kb.getText()
-    toSearch = (searchId + "=" if searchId != 'all' else "") + urllib.quote_plus(srchLabel)
-    srchUrl = "<regexp>".replace("<search>", toSearch)
-    existsSrch = [elem for elem in root.findall("search") if elem.get("url") == srchUrl]
+    toSearch = searchId + "=" + urllib.quote_plus(srchLabel)
+    pattern = r'(?<=[?&])%s=.*?(?=$|&)' % searchId
+    srchUrl = re.sub(pattern, toSearch, srchUrl)
+
+    existsSrch = [elem for elem in existsSrch if elem.get("tosearch") == srchLabel]
     args["url"] = [srchUrl]
     menuContent = <menuId>()
     if menuContent and not existsSrch:
-        toInclude = ET.Element('search', url = srchUrl, tosearch = srchLabel, menu = "<menuId>", searchid = searchId)
+        toInclude = ET.Element('search', url = srchUrl, tosearch = srchLabel,
+                               menu = "<menuId>", searchid = searchId,
+                               searchnode = "<nodeId>")
         root.insert(0, toInclude)
         if not os.path.exists(os.path.dirname(savedsearch)):os.mkdir(os.path.dirname(savedsearch))
         ET.ElementTree(root).write(savedsearch)

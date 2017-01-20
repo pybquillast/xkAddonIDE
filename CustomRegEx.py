@@ -29,7 +29,9 @@ def getCompFlagsPatt(compFlags):
     trnMap = dict(zip(RGXFLAGS + CRGFLAGS, RGXFLAGSPAT + CRGFLAGSPAT))
     compFlags = ''.join(map(lambda x: trnMap[x], compFlags.split('|')))
     rgxflags = ''.join(re.findall(r'[iLmsux]', compFlags))
-    crgflags = ''.join(re.findall(r'\(\?#<[A-Z]+>\)', compFlags))
+    crgflags = re.findall(r'\(\?#<[A-Z]+>\)', compFlags)
+    crgflags = filter(lambda x: x in CRGFLAGSPAT, crgflags)
+    crgflags = ''.join(crgflags)
     if rgxflags: rgxflags = '(?%s)' % rgxflags
     return rgxflags + crgflags
 
@@ -40,13 +42,17 @@ def getCompFlags(flags):
     trnMap = dict(zip(RGXFLAGSPAT, RGXFLAGS))
     rgxflags = map(lambda x: trnMap[x], rgxflags.strip('(?)'))
     trnMap = dict(zip(CRGFLAGSPAT, CRGFLAGS))
-    crgflags = map(lambda x: trnMap[x], re.findall(crgpat, crgflags))
+    crgflags = map(lambda x: trnMap.get(x, None), re.findall(crgpat, crgflags))
+    crgflags = filter(None, crgflags)
     return rgxflags + crgflags
 
 def getFlagsRegexPair(regexpat):
     crgpat = r'\(\?\#\<[A-Z]+\>\)'
     pattern = r'^(\(\?[iLmsux]+\))*((?:%s)+)*(.+)' % crgpat
     rgxflags, crgflags, regexp = re.findall(pattern, regexpat)[0]
+    crgflags = re.findall(crgpat, crgflags)
+    regexp = ''.join(filter(lambda x: x not in CRGFLAGSPAT, crgflags)) + regexp
+    crgflags = ''.join(filter(lambda x: x in CRGFLAGSPAT, crgflags))
     return rgxflags, crgflags, regexp
 
 class ExtRegexParser(HTMLParser):
