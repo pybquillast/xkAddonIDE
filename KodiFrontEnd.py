@@ -264,7 +264,7 @@ class KodiFrontEnd(tk.Frame):
                         self.clipboard_append(vrtFolder['videoUrl'])
                 else:
                     import xbmc
-                    xbmc.log(str(vrtFolder['error']), xbmc.ERROR)
+                    xbmc.log(str(vrtFolder['error']), xbmc.LOGERROR)
                     tkMessageBox.showerror('Error', 'ERROR, please check log file')
         finally:
             self.vrtFolder = None
@@ -276,6 +276,8 @@ class KodiFrontEnd(tk.Frame):
 
     def getVrtFolderImages(self, imageList, imgSizes, mutex):
         image_keys = ['fanart_image', 'iconimage', 'thumbnailimage']
+        urllib.URLopener.version='Mozilla/5.0 (Windows NT 6.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.112 Safari/537.36'
+        opener = urllib.FancyURLopener()
         k = -1
         while 1:
             with mutex:
@@ -304,9 +306,8 @@ class KodiFrontEnd(tk.Frame):
             if bFlag:
                 scheme = urlparse.urlsplit(image).scheme
                 if scheme in  urlparse.uses_netloc:
-                    urllib.URLopener.version = 'Mozilla/5.0 (Windows NT 6.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.112 Safari/537.36'
                     try:
-                        imgFilename, headers = urllib.urlretrieve(image)
+                        imgFilename, headers = opener.retrieve(image)
                     except Exception as e:
                         continue
                     else:

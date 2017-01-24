@@ -247,44 +247,31 @@ class treeExplorer(FilteredTree):
             self.editorWidget.setCursorAt(inspos)
         elif itype.endswith('file'):
             editedFlag = self.editedContent.has_key(nodeId)
-            fileId = source                
+            fileId = source
+            nodeName = self.treeview.item(nodeId, 'text')
+            nodeExt = (os.path.splitext(nodeName)[1]).lower()
             if editedFlag:
+                source = self._genFiles.getFileName(fileId)
                 content = self.editedContent.pop(nodeId)
-                source = self._genFiles.getFileName(fileId)
-                fileExt = (os.path.splitext(source)[1]).lower()
-            elif itype == 'genfile':
-#                 fileId = source
-                source = self._genFiles.getFileName(fileId)
-                content  = self._genFiles.getSource(fileId)
-                fileExt = (os.path.splitext(source)[1]).lower()
             else:
-                fileLoc = urllib.splittype(source)[0]
-                if fileLoc in ['http', 'https', 'ftp']:
-                    urllib.URLopener.version = 'Mozilla/5.0 (Windows NT 6.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.112 Safari/537.36'
-                    (source, HttpMessage) = urllib.urlretrieve(source)
-                    # srcName, srcExt = os.path.splitext(source)
-                    # if not srcExt:
-                    #     srcType = HttpMessage.getHeader('Content-Type')
-                    #     srcExt = '.' + srcType.split('/')[1]
-                    # source = srcName + srcExt
-                    self.treeview.item(nodeId, values=(itype, isEditable, source, inspos))
-                if not os.path.exists(source): return tkMessageBox.showerror('File not found', 'Check the file path')
-                text = self.treeview.item(nodeId, 'text')
-                fileExt = (os.path.splitext(text)[1]).lower()
-                if fileExt in IMAGEFILES:
+                try:
+                    content = self.vrtDisc.getPathContent((itype, source))
+                except Exception as e:
+                    nodeExt = '.txt'
+                    content = 'While retrieving the information for %s (Source file for %s), the following error has ocurred:\n%s'
+                    content = content % (source, nodeName, str(e))
+                if nodeExt in IMAGEFILES:
                     try:
                         from PIL import ImageTk  # @UnresolvedImport
                     except:
                         return tkMessageBox.showerror('Dependencies not meet', 'For image viewing PIL is needed. Not found in your system ')
                     else:
-                        self.image = ImageTk.PhotoImage(file = source)
-                        content = self.image                                
+                        self.image = ImageTk.PhotoImage(data=content)
+                        content = self.image
                         inspos, editedFlag = 'end', False
-                else:
-                    with open(source, 'r') as f:
-                        content = f.read()
+
             sintaxMap = {'.py':PYTHONSINTAX, '.xml':XMLSINTAX}
-            fsintax = sintaxMap.get(fileExt, None)
+            fsintax = sintaxMap.get(nodeExt, None)
             if fsintax == PYTHONSINTAX: self.fetchTextOutline(content, nodeId)
             self.editorWidget.setContent((content, itype, fileId), inspos, fsintax, eval(str(isEditable)))
             self.editorWidget.textw.edit_modified(editedFlag)
@@ -488,17 +475,19 @@ class treeExplorer(FilteredTree):
         if webaddres:
             location = self.treeview.focus()
             urllib.URLopener.version = 'Mozilla/5.0 (Windows NT 6.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.112 Safari/537.36'
-            (fileSource, HttpMessage) = urllib.urlretrieve(webaddres)
+            opener = urllib.FancyURLopener()
+            (fileSource, HttpMessage) = opener.retrieve(webaddres)
             fileName = os.path.basename(fileSource)
             srcName, srcExt = os.path.splitext(fileSource)
             if not srcExt:
-                filetype = HttpMessage.getheader('Content-Type')
-                srcExt = '.' + filetype.split('/')[1]
+                ContentType = HttpMessage.get('Content-Type')
+                m = re.match(r'(\w+)/(\w+)(?:; charset=([-\w]+))*', ContentType)
+                srcExt = m.group(2)
                 fileName += srcExt
             isEditable = False
             childId = SEP.join((location, fileName))
             self.vrtDisc.modResources('insert', fileName, location, isEditable, webaddres)
-            self.treeview.insert(location, 'end', iid = childId, text = fileName, values = ('file', isEditable, fileSource, '1.0' ))
+            self.treeview.insert(location, 'end', iid = childId, text = fileName, values = ('file', isEditable, webaddres, '1.0' ))
 
     def onInsertFile(self):
         pathName = tkFileDialog.askopenfilenames(filetypes=[('python Files', '*.py'), ('xml Files', '*.xml'), ('Image Files', '*.jpg, *.png'), ('All Files', '*.*')])

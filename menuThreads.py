@@ -165,6 +165,9 @@ class menuThreads:
         return iFromId + '_' + iToId + '_lnk'
         
     def setLinkTie(self, iFromId, iToId):
+        bFlag = all(map(self.existsThread, [iFromId, iToId]))
+        # TODO: Check there is no loop with the new link
+        if not bFlag: raise Exception("One of the link terminals doesn't exists")
         ties = [[iFromId, self.getLinkId(iFromId, iToId)], [iToId, self.getLinkId(iToId, iFromId)]]
         for node, lnkId in ties:
             if not self.existsThread(lnkId): self.createThread('link', node, lnkId)

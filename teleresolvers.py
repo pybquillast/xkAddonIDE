@@ -745,7 +745,7 @@ if __name__ == "__main__":
     host, videoId = "streamin", "foa0zic8n8gi"
     host, videoId = "openload", "F0nwrBS_rGY"
     # https://openload.co/f/hdmhgIm_3Vo
-    resolver = getattr(sys.modules[__name__], host)
+    resolver = globals()[host]
     resp = resolver(videoId)
     pass
 
