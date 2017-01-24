@@ -220,7 +220,6 @@ class vrtDisk:
         errMsg = ''
         if name:
             zipFile = zipfile.ZipFile(name, 'w')
-            copySrcFile = zipFile.write
             genFileFromStr = zipFile.writestr
         else:
             if xbmc.special_home != self._addonSettings.getParam('appdir_xbmchome'):
@@ -241,16 +240,13 @@ class vrtDisk:
                 dstDirectory = os.path.dirname(dstFile)
                 if not os.path.exists(dstDirectory): os.makedirs(dstDirectory)
             try:
-                if mode == 'f':
-                    copySrcFile(srcFile, dstFile)
-                elif mode == 's':
-                    srcFile = self._filegenerator.getSource(srcFile)
-                    if not srcFile: continue
-                    if name:
-                        genFileFromStr(dstFile, srcFile)
-                    else:
-                        with open(dstFile,'w') as wfile:
-                            wfile.write(srcFile)
+                fileContent = self.getPathContent((mode, srcFile))
+                if not fileContent: continue
+                if name:
+                    genFileFromStr(dstFile, fileContent)
+                else:
+                    with open(dstFile,'wb') as wfile:
+                        wfile.write(fileContent)
             except:
                 errFile = dstFile.rpartition('\\')[2]
                 errMsg += errFile + '\n'
@@ -267,17 +263,7 @@ class vrtDisk:
     def listAddonFiles(self, name = None):
         fileList = self.getAddonTemplate()[1:]
         fileList = [(filePath, fileAttr['type'], fileAttr['source']) for filePath, fileAttr in fileList if 'Dependencies' not in filePath]
-        addonListFiles = []
-        for filePath, itype, source in fileList:
-            itype = {'file':'f', 'genfile':'s'}[itype]
-            if type == 's':
-                source = self._filegenerator.getSource(source)
-            else:
-                if urllib.splittype(source)[0] in ['http', 'https', 'ftp']:
-                    urllib.URLopener.version = 'Mozilla/5.0 (Windows NT 6.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.112 Safari/537.36'
-                    (source, HttpMessage) = urllib.urlretrieve(source)
-            addonListFiles.append((filePath, itype, source))
-        return addonListFiles
+        return fileList         #addonListFiles
 
     def _getTypeSource(self, path):
         path = os.path.normpath(path)
@@ -288,19 +274,29 @@ class vrtDisk:
         return test['type'], test['source']
 
     def getPathContent(self, path):
-        type, filename = self._getTypeSource(path)
-        if type == 'file':
-            if os.path.splitdrive(filename)[0]:
-                with open(filename, 'rb') as f:
-                    source = f.read()
-            else:
-                f = urllib.urlopen(filename)
-                source = f.read()
-                f.close()
-        elif type == 'genfile':
+        if isinstance(path, basestring):
+            itype, filename = self._getTypeSource(path)
+        else:
+            itype, filename = path
+        if itype == 'file':
+            try:
+                filename = urllib.pathname2url(filename)
+            except:
+                pass
+            urllib.URLopener.version = 'Mozilla/5.0 (Windows NT 6.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.112 Safari/537.36'
+            opener = urllib.FancyURLopener()
+            f = opener.open(filename)
+            source = f.read()
+            ContentType = f.headers['Content-Type']
+            m = re.match(r'(\w+)/(\w+)(?:; charset=([-\w]+))*', ContentType)
+            if m.group(1) == 'text' and m.group(3).lower() != 'utf-8':
+                source = source.decode(m.group(3)).encode('utf-8')
+            f.close()
+        elif itype == 'genfile':
             file_id = filename
             fgen = self.getFileGenerator()
             source = fgen._fileGenerators[file_id].getSource()
+            if source is not None: source = source.encode('utf-8')
         return source
 
 class mountVrtDisk(vrtDisk):

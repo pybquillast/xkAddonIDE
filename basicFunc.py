@@ -98,11 +98,11 @@ def openUrl(urlToOpen, validate = False):
             data = url.read()
             if "text" in url.headers.gettype():
                 encoding = None
-                if 'content-type' in url.headers:
-                    content_type = url.headers['content-type'].lower()
+                if 'Content-Type' in url.headers:
+                    content_type = url.headers['Content-Type'].lower()
                     match = re.search('charset=(\S+)', content_type)
-                    if match: charset = match.group(1)
-                charset = encoding or 'iso-8859-1'
+                    if match: encoding = match.group(1)
+                charset = encoding or 'utf-8'
                 data = data.decode(charset, 'replace')
             toReturn = (url.geturl(), data) 
         url.close()

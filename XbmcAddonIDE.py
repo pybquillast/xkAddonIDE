@@ -919,7 +919,8 @@ class XbmcAddonIDE(tk.Toplevel):
     def setKnotParam(self, paramStr, paramValue):
         if not self.getActiveKnot(): return -1
         knotId = self.getActiveKnot()
-        if paramStr not in ['url', 'regexp'] and self.xbmcThreads.isthreadLocked(knotId):
+        NON_LOCKED_ATTR = ['url', 'regexp', 'compflags', 'headregexp', 'nextregexp']
+        if paramStr not in NON_LOCKED_ATTR and self.xbmcThreads.isthreadLocked(knotId):
             tkMessageBox.showerror('Access Error', knotId + ' is a Code locked Node')
             return 'locked'
         params = self.xbmcThreads.getThreadAttr(knotId, 'params')
@@ -967,7 +968,7 @@ class XbmcAddonIDE(tk.Toplevel):
                 varName = 'headregexp'
             self.setKnotParam(varName, hdrFtr)
             if param != 'label':
-                self.regexpEd.regexpFrame.cbIndex.set(cbLabel)
+                self.regexpEd.RegexpBar.cbIndex.set(cbLabel)
             else:
                 tkMessageBox.showinfo('Header/Footer Edition', 'Label set succesfully')
 
@@ -985,7 +986,7 @@ class XbmcAddonIDE(tk.Toplevel):
 
             cbLabel = '(?#<rhead-%s-%s>)' if param == 'headregexp' else '(?#<rfoot-%s-%s>)'
             cbLabel = cbLabel % (knotId, varName)
-            self.regexpEd.regexpFrame.cbIndex.set(cbLabel)
+            self.regexpEd.regexBar.cbIndex.set(cbLabel)
                 
     def setUrl(self):
         self.setKnotParam('url', self.regexpEd.getActiveUrl())
@@ -998,9 +999,9 @@ class XbmcAddonIDE(tk.Toplevel):
         self.setKnotParam('nextregexp', self.regexpEd.getRegexpPattern())
         
     def setRegexp(self):
-        exitFlag = self.setKnotParam('regexp', self.regexpEd.getRegexpPattern())
+        exitFlag = self.setKnotParam('regexp', self.regexpEd.getRegexpPattern(withFlags=True))
         if exitFlag == 'locked': return
-        # self.setKnotParam('compflags', self.regexpEd.getCompFlags())
+        self.setKnotParam('compflags', '')
         self.regexpEd.regexBar.cbIndex.set('(?#<rexp-' + self.getActiveKnot() + '>)')
         actKnot = self.xbmcThreads.threadDef
         getThParam = self.xbmcThreads.getThreadParam
@@ -1044,7 +1045,11 @@ class XbmcAddonIDE(tk.Toplevel):
             result = dialogObj.result
             parseKnotId = dialogObj.result['lnk_to']
         if parseKnotId:
-            self.xbmcThreads.setLinkTie(self.xbmcThreads.threadDef, parseKnotId)
+            try:
+                self.xbmcThreads.setLinkTie(self.xbmcThreads.threadDef, parseKnotId)
+            except Exception as e:
+                tkMessageBox.showerror('ERROR', str(e))
+                return
             if result:
                 discrim = result['lnk_discrim_prefix'].split('|', 1)[0]
                 discrim += result.get('lnk_discrim_suffix', '')

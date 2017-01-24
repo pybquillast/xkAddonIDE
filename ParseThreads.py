@@ -1519,6 +1519,7 @@ class RegexpFrame(tk.Frame):
                         node = xbmcThreads.getThreadAttr(node, 'name')
                     content += 'name=%s, url=plugin://plugin.video?menu=%s\n' % (xbmcThreads.getThreadAttr(node, 'name'), node)
                 self.setRegexpPattern(r'name=(?P<label>.+?), url=(?P<url>.+?)\s')
+                self.setCompFlags('')
                 self.setContent(content)
                 return
             else:
