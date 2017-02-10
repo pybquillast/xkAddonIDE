@@ -278,7 +278,7 @@ class vrtDisk:
             itype, filename = self._getTypeSource(path)
         else:
             itype, filename = path
-        if itype == 'file':
+        if itype in ('file', 'depfile'):
             try:
                 filename = urllib.pathname2url(filename)
             except:
@@ -289,7 +289,7 @@ class vrtDisk:
             source = f.read()
             ContentType = f.headers['Content-Type']
             m = re.match(r'(\w+)/(\w+)(?:; charset=([-\w]+))*', ContentType)
-            if m.group(1) == 'text' and m.group(3).lower() != 'utf-8':
+            if m.group(3) and m.group(3).lower() != 'utf-8':
                 source = source.decode(m.group(3)).encode('utf-8')
             f.close()
         elif itype == 'genfile':

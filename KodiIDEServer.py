@@ -294,7 +294,11 @@ class KodiServer(ksi.Runner):
     def runAddon(self, url):
         self.initGlobals()
         if url == '/': return self.kodiAddons()
-        self.run(url)
+        while True:
+            self.run(url)
+            if not self.answ or self.answ[1] or not self.answ[2].get('path').startswith('plugin://'):
+                break
+            url = self.answ[2].get('path')
         if self.answ:
             handle, isFolder, content = self.answ
             if not isFolder:

@@ -84,7 +84,6 @@ class TestExtcompile:
         scnd   = CustomRegEx.compile('(?#<table id td{1.*=grp1 2{b.*=grp2 a{href=grp2a src=grp2b}} 3.*=grp3 4.*=grp4}>)',0)
         assert ExtCompObjEquality(first , scnd)
         
-
     def test_tripleAsignation(self):
         """
         Notación equivalente utilizando doble asignación para declarar la variable y el parametro que
@@ -97,6 +96,10 @@ class TestExtcompile:
     def test_raiseAsignationError(self):
             with pytest.raises(re.error):
                 CustomRegEx.compile('(?#<TAG ese a{*=icon a.*="http//esto/es/prueba" href=url>)', 0)
+
+    def test_regexpFlags(self):
+        requested = {'tagpholder': {}}
+        assert CustomRegEx.compile('(?iLm)(?#<table>)', 0).tags == requested
 
 class TestExtRegexParser:
     @pytest.mark.parametrize('cycle', [3, 2, 1])
@@ -196,8 +199,6 @@ class TestExtMatch:
             'Error porque no se pueden utilizar variables cuando se tiene ".*" como variable requerida'
             CustomRegEx.compile('(?#<span class=var1 .*>)')
         
-        
-    
     def test_tag(self):
         answer = CustomRegEx.findall('(?#<span|a *=label>)', self.htmlStr)
         required1 = ['span0', 'bloque1', 'bloque2', 'span3']
@@ -281,7 +282,25 @@ class TestExtMatch:
         answer = CustomRegEx.findall('(?#<a href=url *=label __EZONE__="^[!--]">)', self.htmlStr)
         required = [('http://www.elheraldo.com.co', 'El Heraldo')]
         assert answer == required
-        
+
+    def test_regexpflags(self):
+        answer = CustomRegEx.findall('(?iLm)(?#<hijo id="hijo1" *=label>)', self.htmlStr)
+        required = ['primer hijo']
+        assert answer == required, 'Comentario y variable independiente'
+
+        answer = CustomRegEx.findall('(?#<SPAN>)(?#<PARAM>)(?#<hijo id="hijo1" *=label>)', self.htmlStr)
+        required = ['primer hijo']
+        assert answer == required, 'Comentario y variable independiente'
+
+        answer = CustomRegEx.findall('(?#<SPAN>)(?iLm)(?#<PARAM>)(?#<hijo id="hijo1" *=label>)', self.htmlStr)
+        required = ['primer hijo']
+        assert answer == required, 'Comentario y variable independiente'
+
+        answer = CustomRegEx.findall('(?#<SPAN>)(?iLm)(?#<PARAM>)(?# Esto es un comentario)(?#<hijo id="hijo1" *=label>)', self.htmlStr)
+        required = ['primer hijo']
+        assert answer == required, 'Comentario y variable independiente'
+
+
 class TestRelationalTags:
     htmlStr = """
 <span class="independiente">span0</span>
@@ -377,6 +396,10 @@ class TestOptionalVars:
             m = CustomRegEx.ExtCompile(pattern)
             required = {'id': 1, 'label': 3, 'url': 2}
             assert m.groupindex == required, 'Los guiones bajos(_) solo denotan que la variable es opcional'
+
+        answer = CustomRegEx.findall('(?#<son id=_id_ href=_url_>)', self.htmlStr)
+        required = [('1','son1 base'), ('2','son2 base'), ('3',None), ('4','son4 base')]
+        assert answer == required, 'Todas las variables pueden ser opcionales'
 
         answer = CustomRegEx.findall(r'(?#<son id=id href1="son2[^"]+"=_url_>)', self.htmlStr)
         required = [('1', None), ('2','son2 alterno'), ('3', None), ('4', None)]

@@ -164,7 +164,8 @@ class threadXmlFileWrapper(xmlFileWrapper):
         if changedSettings.has_key('otherparameters') or 'otherparameters' in changedSettings['reset']:
             if self.settings.has_key('otherparameters'):
                 oldOther = [tuple(elem.split(',')) for elem in self.settings['otherparameters'].split('|')]
-                for key, value in oldOther:
+                for elem in oldOther:
+                    key = elem[0]
                     nodeParams.pop(key)
         for key in changedSettings.pop('reset'):
             self.settings.pop(key)

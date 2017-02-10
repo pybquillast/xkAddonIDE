@@ -136,6 +136,7 @@ class treeExplorer(FilteredTree):
         self.setOnTreeSelProc(self.onTreeSelection)
         self.setPopUpMenu(self.treeExpPopUpMenu)
         self.reportChange = True
+        self.refreshFlag = False
         self.menuBar = {}
          
     def setExplorerParam(self, vrtDisc):
@@ -170,7 +171,7 @@ class treeExplorer(FilteredTree):
         root = self.treeview.get_children()
         addonTemplate = self.vrtDisc.getAddonTemplate()
         rootId = self.vrtDisc.addon_id()
-        if not root or root[0] != self.vrtDisc.addon_id():
+        if self.refreshFlag or not root or root[0] != self.vrtDisc.addon_id():
             self.activeSel = None
             self.refreshFlag = False
             activeNode = addonTemplate[0]
@@ -233,46 +234,72 @@ class treeExplorer(FilteredTree):
     def onTreeSelection(self, node = None):
         nodeId = node or self.treeview.focus()
         prevActiveNode = self.setActiveNode(nodeId)
-        if self.treeview.set(prevActiveNode, column = 'type') in ['file', 'depfile']:
-            insertIndx = self.editorWidget.textw.index('insert')
-            self.treeview.set(prevActiveNode, column = 'inspos', value = insertIndx)
-        if self.editorWidget.textw.edit_modified():
-            self.editedContent[prevActiveNode] = self.editorWidget.textw.get('1.0','end')
+        if self.treeview.exists(prevActiveNode):
+            if self.treeview.set(prevActiveNode, column = 'type') in ['file', 'depfile']:
+                insertIndx = self.editorWidget.textw.index('insert')
+                self.treeview.set(prevActiveNode, column = 'inspos', value = insertIndx)
+            if self.editorWidget.textw.edit_modified():
+                self.editedContent[prevActiveNode] = self.editorWidget.textw.get('1.0','end')
+        else:
+            if self.editedContent.get(prevActiveNode): self.editedContent.pop(prevActiveNode)
         itype, isEditable, source, inspos = self.treeview.item(nodeId, 'values')        
         if itype == 'markpos':
-            parent = self.treeview.parent(nodeId)
-            if prevActiveNode != parent: 
+            def getFileIdForMarkPos(nodo):
+                while self.treeview.set(nodo, 'type') == 'markpos':
+                    nodo = self.treeview.parent(nodo)
+                return nodo
+            parent = getFileIdForMarkPos(nodeId)
+            if parent != getFileIdForMarkPos(prevActiveNode):
                 self.onTreeSelection(node = parent)
                 self.setActiveNode(nodeId)
             self.editorWidget.setCursorAt(inspos)
-        elif itype.endswith('file'):
-            editedFlag = self.editedContent.has_key(nodeId)
-            fileId = source
-            nodeName = self.treeview.item(nodeId, 'text')
-            nodeExt = (os.path.splitext(nodeName)[1]).lower()
-            if editedFlag:
-                source = self._genFiles.getFileName(fileId)
-                content = self.editedContent.pop(nodeId)
-            else:
-                try:
-                    content = self.vrtDisc.getPathContent((itype, source))
-                except Exception as e:
-                    nodeExt = '.txt'
-                    content = 'While retrieving the information for %s (Source file for %s), the following error has ocurred:\n%s'
-                    content = content % (source, nodeName, str(e))
-                if nodeExt in IMAGEFILES:
+        else:
+            if itype.endswith('file'):
+                editedFlag = self.editedContent.has_key(nodeId)
+                fileId = source
+                nodeName = self.treeview.item(nodeId, 'text')
+                nodeExt = (os.path.splitext(nodeName)[1]).lower()
+                if editedFlag:
+                    source = self._genFiles.getFileName(fileId)
+                    content = self.editedContent.pop(nodeId)
+                else:
                     try:
-                        from PIL import ImageTk  # @UnresolvedImport
-                    except:
-                        return tkMessageBox.showerror('Dependencies not meet', 'For image viewing PIL is needed. Not found in your system ')
-                    else:
-                        self.image = ImageTk.PhotoImage(data=content)
-                        content = self.image
-                        inspos, editedFlag = 'end', False
+                        content = self.vrtDisc.getPathContent((itype, source))
+                    except Exception as e:
+                        nodeExt = '.txt'
+                        content = 'While retrieving the information for %s (Source file for %s), the following error has ocurred:\n%s'
+                        content = content % (source, nodeName, str(e))
+                    if nodeExt in IMAGEFILES:
+                        try:
+                            from PIL import ImageTk  # @UnresolvedImport
+                        except:
+                            return tkMessageBox.showerror('Dependencies not meet', 'For image viewing PIL is needed. Not found in your system ')
+                        else:
+                            self.image = ImageTk.PhotoImage(data=content)
+                            content = self.image
+                            inspos, editedFlag = 'end', False
 
-            sintaxMap = {'.py':PYTHONSINTAX, '.xml':XMLSINTAX}
-            fsintax = sintaxMap.get(nodeExt, None)
-            if fsintax == PYTHONSINTAX: self.fetchTextOutline(content, nodeId)
+                sintaxMap = {'.py':PYTHONSINTAX, '.xml':XMLSINTAX}
+                fsintax = sintaxMap.get(nodeExt, None)
+                if fsintax == PYTHONSINTAX: self.fetchTextOutline(content, nodeId)
+            elif itype in ['root', 'dir', 'requires', 'depdir']:
+                lines = []
+                for childId in self.treeview.get_children(nodeId):
+                    childName = self.treeview.item(childId, 'text')
+                    itype, isEditable, source, inspos = self.treeview.item(childId, 'values')
+                    if not itype.endswith('file'):
+                        itype, childName, isEditable, source = '<DIR>', childName, '', ''
+                    else:
+                        if isinstance(isEditable, basestring):isEditable = int(eval(isEditable))
+                        isEditable = 'True' if isEditable else 'False'
+                        itype = '<%s>' % itype
+                    lines.append('%-9s  %-20s  %-5s  %s'%(itype, childName, isEditable, source))
+                content = '\n'.join(lines)
+                fileId = source
+                inspos = '1.0'
+                fsintax = None
+                isEditable= 'False'
+                editedFlag = False
             self.editorWidget.setContent((content, itype, fileId), inspos, fsintax, eval(str(isEditable)))
             self.editorWidget.textw.edit_modified(editedFlag)
 
@@ -329,8 +356,7 @@ class treeExplorer(FilteredTree):
         self.treeview.focus(nodeId)
         itype = self.treeview.set(nodeId, 'type')
         activeNode = self.activeSel
-        if itype.endswith('file'):
-            self.setActiveSel(nodeId)
+        self.setActiveSel(nodeId)
         return activeNode or ''
          
     def setEditorWidget(self, editorWidget):
@@ -351,6 +377,8 @@ class treeExplorer(FilteredTree):
         iid = self.treeview.focus()
         self.vrtDisc.modDependencies('delete', iid, None)
         self.treeview.delete(iid)
+        iid = iid.rpartition('/')[0]
+        self.onTreeSelection(iid)
 
     def onNewDependency(self, iid = None, newDependency = None):
         from xbmc import translatePath
@@ -368,7 +396,7 @@ class treeExplorer(FilteredTree):
             addonVer = xmlfile.get('version')
             source = os.path.basename(newDependency)
             self.vrtDisc.modDependencies('insert', source, addonVer)
-            self.insertDirectory(iid, newDependency, values = ('depdir', False, source, addonVer), excludeext = ('.pyc', '.pyo'))
+            self.insertDirectory(iid, newDependency, values = ('depdir', 0, source, addonVer), excludeext = ('.pyc', '.pyo'))
             self.vrtDisc.hasChange = True
 
     def insertDirectory(self, dirParent = None, dirName = None, values = None, excludeext = None):
@@ -469,46 +497,48 @@ class treeExplorer(FilteredTree):
         self.vrtDisc.modResources('delete', iid, None, None, None)
         self.treeview.delete(iid)
         self.vrtDisc.hasChange = True
+        iid = iid.rpartition('/')[0]
+        self.onTreeSelection(iid)
+
+    def insertTreeElem(self, parentid, elemName, elemType, elemEditable, elemSource, refreshFlag=True):
+        childId = SEP.join((parentid, elemName))
+        self.vrtDisc.modResources('insert', elemName, parentid, elemEditable, elemSource)
+        self.treeview.insert(parentid, 'end', iid = childId, text = elemName, values = (elemType, elemEditable, elemSource, '1.0' if elemType.endswith('file') else '' ))
+        if refreshFlag: self.onTreeSelection(parentid)
 
     def onInsertWeb(self):
         webaddres = tkSimpleDialog.askstring('Web Resource', 'Enter url for the web resource')
-        if webaddres:
-            location = self.treeview.focus()
-            urllib.URLopener.version = 'Mozilla/5.0 (Windows NT 6.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.112 Safari/537.36'
-            opener = urllib.FancyURLopener()
-            (fileSource, HttpMessage) = opener.retrieve(webaddres)
-            fileName = os.path.basename(fileSource)
-            srcName, srcExt = os.path.splitext(fileSource)
-            if not srcExt:
-                ContentType = HttpMessage.get('Content-Type')
-                m = re.match(r'(\w+)/(\w+)(?:; charset=([-\w]+))*', ContentType)
-                srcExt = m.group(2)
-                fileName += srcExt
-            isEditable = False
-            childId = SEP.join((location, fileName))
-            self.vrtDisc.modResources('insert', fileName, location, isEditable, webaddres)
-            self.treeview.insert(location, 'end', iid = childId, text = fileName, values = ('file', isEditable, webaddres, '1.0' ))
+        if not webaddres: return
+        location = self.treeview.focus()
+        urllib.URLopener.version = 'Mozilla/5.0 (Windows NT 6.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.112 Safari/537.36'
+        opener = urllib.FancyURLopener()
+        (fileSource, HttpMessage) = opener.retrieve(webaddres)
+        fileName = os.path.basename(fileSource)
+        srcName, srcExt = os.path.splitext(fileSource)
+        if not srcExt:
+            ContentType = HttpMessage.get('Content-Type')
+            m = re.match(r'(\w+)/(\w+)(?:; charset=([-\w]+))*', ContentType)
+            srcExt = m.group(2)
+            fileName += srcExt
+        isEditable = False
+        self.insertTreeElem(location, fileName, 'file', isEditable, webaddres)
 
     def onInsertFile(self):
         pathName = tkFileDialog.askopenfilenames(filetypes=[('python Files', '*.py'), ('xml Files', '*.xml'), ('Image Files', '*.jpg, *.png'), ('All Files', '*.*')])
-        if pathName:
-            location = self.treeview.focus()
-            for fileSource in pathName:
-                fileExt = os.path.splitext(fileSource)[1]
-                fileName = os.path.basename(fileSource)
-                isEditable = fileExt not in IMAGEFILES
-                childId = SEP.join((location, fileName))
-                self.vrtDisc.modResources('insert', fileName, location, isEditable, fileSource)
-                self.treeview.insert(location, 'end', iid = childId, text = fileName, values = ('file', isEditable, fileSource, '1.0' ))
+        if not pathName: return
+        location = self.treeview.focus()
+        for fileSource in pathName:
+            fileExt = os.path.splitext(fileSource)[1]
+            fileName = os.path.basename(fileSource)
+            isEditable = int(fileExt not in IMAGEFILES)
+            self.insertTreeElem(location, fileName, 'file', isEditable, fileSource, refreshFlag=False)
+        self.onTreeSelection(location)
 
- 
     def onInsertDir(self):
         parent = self.treeview.focus()
         newDir = tkSimpleDialog.askstring('Insert directory', 'Input name for new directory')
-        if newDir:
-            childId = SEP.join((parent, newDir))
-            newDirId = self.treeview.insert(parent, 'end', iid = childId,text = newDir, values = ('dir', True, '', ''))
-            self.treeview.focus(newDirId)
+        if not newDir: return
+        self.insertTreeElem(parent, newDir, 'dir', True, '')
 
 class ApiTree(FilteredTree):
     def __init__(self, master, xbmcThread):

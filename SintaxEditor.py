@@ -252,7 +252,10 @@ class SintaxEditor(tk.Frame):
         if selRange: textw.delete(*selRange)
         
     def selPaste(self, event = None):
+        if not self.editable: return 'break'
         textw = self.textw
+        selRange = self.textw.tag_ranges('sel')
+        if selRange: self.textw.delete(*selRange)
         try:
             text = textw.selection_get(selection = 'CLIPBOARD')
             baseIndex = textw.index('insert')
@@ -272,6 +275,7 @@ class SintaxEditor(tk.Frame):
         return selRange
 
     def selCut(self, event = None):
+        if not self.editable: return 'break'
         textw = self.textw
         selRange = self.selCopy()
         if selRange: textw.delete(*selRange)
@@ -279,6 +283,7 @@ class SintaxEditor(tk.Frame):
     def selAll(self, event = None):
         textw = self.textw
         textw.tag_add('sel', '1.0', 'end')
+        return "break"
         
     def setCustomFont(self, tFamily = "Consolas", tSize = 18):
         self.customFont.configure(family = tFamily, size = tSize)
@@ -299,8 +304,10 @@ class SintaxEditor(tk.Frame):
             self.cellInput = ''
 
     def keyHandler(self,event):
-        if not self.editable and event.keysym not in  ['Left', 'Right', 'Up','Down','Next','Prior','Button-1']: 
-            return 'break'        
+        navKeys = ['Left', 'Right', 'Up','Down','Next','Prior', 'End', 'Home',
+                   'Button-1']
+        if not self.editable and event.keysym not in  navKeys:
+            return 'break'
         textw =  event.widget
         selRange = self.getSelRange()
         if event.keysym == 'Return':

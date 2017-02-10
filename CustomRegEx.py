@@ -431,7 +431,9 @@ class ExtRegexObject:
                 reqTags.pop(itemPath)
 
         self.findTag = ExtRegexParser(self.varList, self.tags, self.optTags)
-        rootTag = self.tags.keys()[0].partition('.')[0]
+        rootTag = 'tagpholder'
+        # if self.tags:
+        #     rootTag = self.tags.keys()[0].partition('.')[0]
         excAttr = ['*', '__TAG__']
         for fullPath, itemName in self.varList:
             if itemName == itemName.strip('_'): continue
@@ -923,10 +925,14 @@ def compile(regexPatternIn, flags=0, debug = 0):
     PATDIRECT   = r'\(\?#(<(?:PASS|SPAN|PARAM|SEARCH|NXTPOSINI).*?>)\)'
 
     if not regexPatternIn:return None
-    directives   = re.findall(PATDIRECT, regexPatternIn)  # @UnusedVariable
-    regexPattern = re.sub(PATDIRECT, '', regexPatternIn)
+    pattern = r'\(\?#<.+?>\)'
+    rgxflags = ''.join(re.findall(pattern, regexPatternIn))
+    rePattern = ''.join(re.split(pattern, regexPatternIn))
+
+    regexPattern = re.sub(PATDIRECT, '', rgxflags)
     patterns = re.split(r'(?:<\*<|>\*<|>\*>|>|<)', regexPattern)
     if not (patterns[0].startswith(BEG) and patterns[-1].endswith(END)):
+        regexPattern = rePattern
         return ExtCompile(regexPattern, flags)
     patterns = patterns[1:-1]
     
