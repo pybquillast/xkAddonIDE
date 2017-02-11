@@ -170,16 +170,15 @@ class treeExplorer(FilteredTree):
     def refreshPaneInfo(self):
         root = self.treeview.get_children()
         addonTemplate = self.vrtDisc.getAddonTemplate()
+        templateRoot, addonTemplate = addonTemplate[0], addonTemplate[1:]
         rootId = self.vrtDisc.addon_id()
         if self.refreshFlag or not root or root[0] != self.vrtDisc.addon_id():
             self.activeSel = None
             self.refreshFlag = False
-            activeNode = addonTemplate[0]
-            addonTemplate = addonTemplate[1:]
+            activeNode = templateRoot
             toDelete = root
         else:
             activeNode = self.treeview.tag_has('activeNode')[0]
-            addonTemplate = addonTemplate[1:]
             treefiles = self.getTreeFileStruct()
             actualfiles = [x[0] for x in addonTemplate]
             diff = set(treefiles).symmetric_difference(actualfiles)
@@ -193,10 +192,7 @@ class treeExplorer(FilteredTree):
             if activeNode not in toDelete:
                 activeNode = None
             else:
-                while activeNode in toDelete:
-                    npos = treefiles.index(activeNode)
-                    treefiles.pop(npos)
-                    activeNode = treefiles[npos - 1] if npos else treefiles[-1]
+                activeNode = templateRoot
             toAppend = sorted(map(lambda x: actualfiles.index(x), toAppend))
             addonTemplate = map(lambda x: addonTemplate[x], toAppend)
             pass
