@@ -364,7 +364,7 @@ class TreeList(ttk.Treeview):
             self.sortby = treeCol
             rows = self.get_children()
             self.detach(*rows)
-            rows = sorted(rows, key=lambda x: treew.item(x, option='values')[treeCol], reverse=revFlag)
+            rows = sorted(rows, key=lambda x: treew.set(x, treeCol), reverse=revFlag)
             for k, iid in enumerate(rows):
                 treew.move(iid, '', k)
             # self.update()
@@ -374,7 +374,7 @@ class TreeList(ttk.Treeview):
 
 if __name__ == '__main__':
     root = tk.Tk()
-    test = 'wait'
+    test = 'TreeList'
     if test == 'KodiListBox':
         root.withdraw()
         lista = ['uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve', 'diez']

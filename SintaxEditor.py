@@ -36,7 +36,7 @@ XMLSINTAX = [
                 ['content', dict(foreground = rgbColor(0,0,0)), r'(?<=>)[^<]+(?=</)',re.MULTILINE]
                 ]
 
-
+sintaxMap = {'.py':PYTHONSINTAX, '.xml':XMLSINTAX}
 
 
 class SintaxEditor(tk.Frame):
@@ -50,7 +50,6 @@ class SintaxEditor(tk.Frame):
         self.setGUI(hrzSlider, vrtSlider)
         self.editable = True
         self.contentType = self.contentSource = None
-        
 
     def pasteFromClipboard(self, event = None):
         textw = self.textw
@@ -231,6 +230,12 @@ class SintaxEditor(tk.Frame):
             self.textw.insert('1.0',text)
             self.formatContent()
             self.setCursorAt(inspos)
+        elif hasattr(text, 'nametowidget'):
+            parent = text.winfo_parent()
+            wparent = text.nametowidget(parent)
+            if wparent == self.textw:
+                self.textw.window_create('1.0', window=text, stretch=1)
+                pass
         else:
             self.textw.image_create(inspos, image = text)
             

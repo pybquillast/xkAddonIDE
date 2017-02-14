@@ -9,10 +9,14 @@ import ttk
 import tkMessageBox
 import tkFileDialog
 import tkSimpleDialog
+import FileGenerator
 import re
 import urllib
+import zipfile
+import StringIO
 import xml.etree.ElementTree as ET
-from SintaxEditor import PYTHONSINTAX, XMLSINTAX
+import SintaxEditor
+import idewidgets
 from PIL import Image, ImageTk
 
 SEP = '/'
@@ -170,16 +174,15 @@ class treeExplorer(FilteredTree):
     def refreshPaneInfo(self):
         root = self.treeview.get_children()
         addonTemplate = self.vrtDisc.getAddonTemplate()
+        templateRoot, addonTemplate = addonTemplate[0], addonTemplate[1:]
         rootId = self.vrtDisc.addon_id()
         if self.refreshFlag or not root or root[0] != self.vrtDisc.addon_id():
             self.activeSel = None
             self.refreshFlag = False
-            activeNode = addonTemplate[0]
-            addonTemplate = addonTemplate[1:]
+            activeNode = templateRoot
             toDelete = root
         else:
             activeNode = self.treeview.tag_has('activeNode')[0]
-            addonTemplate = addonTemplate[1:]
             treefiles = self.getTreeFileStruct()
             actualfiles = [x[0] for x in addonTemplate]
             diff = set(treefiles).symmetric_difference(actualfiles)
@@ -193,10 +196,7 @@ class treeExplorer(FilteredTree):
             if activeNode not in toDelete:
                 activeNode = None
             else:
-                while activeNode in toDelete:
-                    npos = treefiles.index(activeNode)
-                    treefiles.pop(npos)
-                    activeNode = treefiles[npos - 1] if npos else treefiles[-1]
+                activeNode = templateRoot
             toAppend = sorted(map(lambda x: actualfiles.index(x), toAppend))
             addonTemplate = map(lambda x: addonTemplate[x], toAppend)
             pass
@@ -231,6 +231,44 @@ class treeExplorer(FilteredTree):
             self.onTreeSelection(node = activeNode)
         self.vrtDisc._reportChange = True
  
+
+    def processRawContent(self, nodeId, rawcontent):
+        filesource = self.treeview.set(nodeId, 'source').split('::')
+        rawtype = ''
+        while filesource:
+            filetype, filesource = filesource[0], filesource[1:]
+            if not rawtype:
+                if filetype.endswith('.zip'):
+                    fp = StringIO.StringIO(rawcontent)
+                    rawcontent = zipfile.ZipFile(fp, 'r')
+                elif filetype.endswith('.pck'):
+                    rawcontent = FileGenerator.vrtDisk(file=StringIO.StringIO(rawcontent))
+                rawtype = os.path.splitext(filetype)[1]
+            else:
+                if rawtype == '.zip':
+                    rawcontent = rawcontent.read(filetype)
+                elif rawtype == '.pck':
+                    rawcontent = rawcontent.getPathContent(filetype)
+                if rawtype in ['izip', '.pck']:filesource.insert(0, filetype)
+                rawtype = ''
+        filetype = os.path.splitext(filetype)[1]
+        if filetype in IMAGEFILES:
+            try:
+                from PIL import ImageTk  # @UnresolvedImport
+            except:
+                return tkMessageBox.showerror('Dependencies not meet', 'For image viewing PIL is needed. Not found in your system ')
+            else:
+                self.image = ImageTk.PhotoImage(data=rawcontent)
+                content = self.image
+        elif filetype == '.zip':
+            content = '\n'.join(rawcontent.namelist())
+        elif filetype == '.pck':
+            addonfiles = [x[0] for x in rawcontent.listAddonFiles()]
+            content = '\n'.join(sorted(addonfiles))
+        else:
+            content = rawcontent
+        return content, rawcontent
+
     def onTreeSelection(self, node = None):
         nodeId = node or self.treeview.focus()
         prevActiveNode = self.setActiveNode(nodeId)
@@ -242,7 +280,7 @@ class treeExplorer(FilteredTree):
                 self.editedContent[prevActiveNode] = self.editorWidget.textw.get('1.0','end')
         else:
             if self.editedContent.get(prevActiveNode): self.editedContent.pop(prevActiveNode)
-        itype, isEditable, source, inspos = self.treeview.item(nodeId, 'values')        
+        itype, isEditable, source, inspos = self.treeview.item(nodeId, 'values')
         if itype == 'markpos':
             def getFileIdForMarkPos(nodo):
                 while self.treeview.set(nodo, 'type') == 'markpos':
@@ -260,30 +298,33 @@ class treeExplorer(FilteredTree):
                 nodeName = self.treeview.item(nodeId, 'text')
                 nodeExt = (os.path.splitext(nodeName)[1]).lower()
                 if editedFlag:
-                    source = self._genFiles.getFileName(fileId)
                     content = self.editedContent.pop(nodeId)
                 else:
                     try:
-                        content = self.vrtDisc.getPathContent((itype, source))
+                        rawcontent = self.vrtDisc.getPathContent((itype, source.split('::',1)[0]))
                     except Exception as e:
                         nodeExt = '.txt'
-                        content = 'While retrieving the information for %s (Source file for %s), the following error has ocurred:\n%s'
-                        content = content % (source, nodeName, str(e))
-                    if nodeExt in IMAGEFILES:
-                        try:
-                            from PIL import ImageTk  # @UnresolvedImport
-                        except:
-                            return tkMessageBox.showerror('Dependencies not meet', 'For image viewing PIL is needed. Not found in your system ')
-                        else:
-                            self.image = ImageTk.PhotoImage(data=content)
-                            content = self.image
-                            inspos, editedFlag = 'end', False
-
-                sintaxMap = {'.py':PYTHONSINTAX, '.xml':XMLSINTAX}
-                fsintax = sintaxMap.get(nodeExt, None)
-                if fsintax == PYTHONSINTAX: self.fetchTextOutline(content, nodeId)
+                        contentFmt = 'While retrieving the information for %s (Source file for %s), the following error has ocurred:\n%s'
+                        rawcontent = contentFmt % (source, nodeName, str(e))
+                    content, rawcontent = self.processRawContent(nodeId, rawcontent)
+                if nodeExt in IMAGEFILES:
+                    inspos, editedFlag = 'end', False
+                fsintax = SintaxEditor.sintaxMap.get(nodeExt, None)
+                self.getContentOutline(rawcontent, nodeId)
             elif itype in ['root', 'dir', 'requires', 'depdir']:
-                lines = []
+                parent = self.editorWidget.textw
+                lwidth, lheight = parent.winfo_width(), parent.winfo_height()
+                flist = tk.Frame(parent, width=lwidth, height=lheight)
+                flist.pack_propagate(0)
+                columnids = ('name', 'type','editable', 'source')
+                wlist = idewidgets.TreeList(flist,
+                                            cursor='arrow',
+                                            displaycolumns='#all',
+                                            show='headings',
+                                            columns=columnids)
+                for cid in columnids:
+                    wlist.heading(cid, text=cid)
+                wlist.pack(fill=tk.BOTH, expand=tk.YES)
                 for childId in self.treeview.get_children(nodeId):
                     childName = self.treeview.item(childId, 'text')
                     itype, isEditable, source, inspos = self.treeview.item(childId, 'values')
@@ -293,8 +334,9 @@ class treeExplorer(FilteredTree):
                         if isinstance(isEditable, basestring):isEditable = int(eval(isEditable))
                         isEditable = 'True' if isEditable else 'False'
                         itype = '<%s>' % itype
-                    lines.append('%-9s  %-20s  %-5s  %s'%(itype, childName, isEditable, source))
-                content = '\n'.join(lines)
+                    linea = (childName, itype, isEditable, source)
+                    wlist.insert('', 'end', values = linea)
+                content = flist
                 fileId = source
                 inspos = '1.0'
                 fsintax = None
@@ -302,6 +344,7 @@ class treeExplorer(FilteredTree):
                 editedFlag = False
             self.editorWidget.setContent((content, itype, fileId), inspos, fsintax, eval(str(isEditable)))
             self.editorWidget.textw.edit_modified(editedFlag)
+
 
     def treeExpPopUpMenu(self):
         selNode = self.treeview.focus()
@@ -360,9 +403,9 @@ class treeExplorer(FilteredTree):
         return activeNode or ''
          
     def setEditorWidget(self, editorWidget):
-        self.editorWidget = editorWidget 
-         
-    def registerNode(self, iid, childName = False):
+        self.editorWidget = editorWidget
+
+    def registerNode(self, iid, childName=None):
         treeview = self.treeview
         if treeview.exists(iid): return
         iidPart = iid.rpartition(SEP)
@@ -435,17 +478,32 @@ class treeExplorer(FilteredTree):
         self.treeview.focus(childId)
         return childId
  
-    def fetchTextOutline(self,text, moduleID):
-        xbmcThread = self.vrtDisc._menuthreads
-        fileTree = self.getTextTree(text, prefix = moduleID)
-        for child in sorted(fileTree):
-            self.registerNode(child[0], child[1])
-            self.treeview.set(child[0],column = 'type', value = 'markpos')
-            self.treeview.set(child[0],column = 'source', value = (child[2],child[3]))
-            self.treeview.set(child[0],column = 'inspos', value = '1.0 + %d chars' % child[2])
-            if xbmcThread.existsThread(child[1]) and xbmcThread.isthreadLocked(child[1]):
-                self.treeview.item(child[0], tags=('locked',))
-
+    def getContentOutline(self, rawcontent, moduleID):
+        filetype = os.path.splitext(moduleID)[1]
+        if filetype == '.py':
+            xbmcThread = self.vrtDisc._menuthreads
+            fileTree = self.getTextTree(rawcontent, prefix = moduleID)
+            for child in sorted(fileTree):
+                self.registerNode(child[0], child[1])
+                self.treeview.set(child[0],column = 'type', value = 'markpos')
+                self.treeview.set(child[0],column = 'source', value = (child[2],child[3]))
+                self.treeview.set(child[0],column = 'inspos', value = '1.0 + %d chars' % child[2])
+                if xbmcThread.existsThread(child[1]) and xbmcThread.isthreadLocked(child[1]):
+                    self.treeview.item(child[0], tags=('locked',))
+        elif filetype in ['.zip', '.pck']:
+            if filetype == '.zip':
+                nodelist = rawcontent.namelist()
+            elif filetype == '.pck':
+                nodelist = [x[0] for x in rawcontent.listAddonFiles()]
+            self.treeview.set(moduleID, column='type', value='depdir')
+            zsource = self.treeview.set(moduleID, column='source')
+            for child in sorted(nodelist):
+                childId = moduleID + '/' + child
+                self.registerNode(childId, True)
+                # values = (itype, isEditable, source, inspos)
+                values = ('file', 'False', zsource + '::' + child, '1.0')
+                self.treeview.item(childId, values=values)
+            self.treeview.set(moduleID, column='type', value='file')
  
     def getTextTree(self, text, prefix = ''):    
         prefixID = ''

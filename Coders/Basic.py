@@ -504,6 +504,10 @@ class addonFile_apimodule(addonFile):
         self._location = ""
         self._isEditable = True
 
+    @property
+    def fileName(self):
+        return self.addonsettings.getParam('addon_module')
+
     def addon_id(self):
         return self.addonsettings.getParam('addon_id')
 

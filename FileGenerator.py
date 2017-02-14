@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 '''
 Created on 30/12/2014
 
@@ -84,8 +85,22 @@ class FileGenerator(object):
 
 class vrtDisk:
 
-    def __init__(self, menuthreads=None, addonsettings=None, modifiedcode=None):
-        self._menuthreads = menuthreads or menuThreads.menuThreads()
+    def __init__(self, menuthreads=None, addonsettings=None, modifiedcode=None, file=None):
+        if file is not None:
+            if isinstance(file, basestring):
+                file = open(file, 'rb')
+
+            menuthreads = self.initThreadData()
+            threadData = json.loads(file.readline())
+            menuthreads.setThreadData(*threadData)
+
+            addonsettings = xmlFileWrapper.xmlFileWrapper('Addon_Settings.xml')
+            settings = json.loads(file.readline())
+            addonsettings.setNonDefaultParams(settings)
+
+            modifiedcode = json.loads(file.readline())
+
+        self._menuthreads = menuthreads or self.initThreadData()
         self._addonSettings = addonsettings or xmlFileWrapper.xmlFileWrapper('Addon_Settings.xml')
         self._filegenerator = FileGenerator(self._addonSettings, self._menuthreads)
         self._changeMngr = None
@@ -93,6 +108,16 @@ class vrtDisk:
         self.hasChange = False
         self._filegenerator.modSourceCode = modifiedcode or []
         self.path_cache = {}
+
+    def initThreadData(self):
+        xbmcMenu = menuThreads.menuThreads()
+        params = {'url':'https://www.youtube.com/watch?v=aCWRPqLt0wE', 'regexp':r'"adaptive_fmts":"(?P<youtube_fmts>[^"]+)"', 'compflags':'re.DOTALL'}
+        xbmcMenu.setThreadParams('media', params)
+
+        xbmcMenu.lstChanged = []  # Se borra cualquier actualización del árbol
+                                  # porque este en este punto no existe
+        return xbmcMenu
+
 
     def setChangeMngr(self, callbackfunction):
         self._changeMngr = callbackfunction
@@ -215,50 +240,53 @@ class vrtDisk:
     def getFileGenerator(self):
         return self._filegenerator
 
-    def mapVrtDisk(self, name=None):
-        import xbmc
+    def zipFileStr(self):
+        fp = StringIO.StringIO()
         errMsg = ''
-        if name:
-            zipFile = zipfile.ZipFile(name, 'w')
-            genFileFromStr = zipFile.writestr
-        else:
-            if xbmc.special_home != self._addonSettings.getParam('appdir_xbmchome'):
-                xbmc.special_home = self._addonSettings.getParam('appdir_xbmchome')
-            baseDirectory = xbmc.translatePath('special://home/addons')
-            if not os.path.exists(baseDirectory):
-                xbmc.special_home = special_home = tkFileDialog.askdirectory(title='Enter directory for special://home/addons')
-                nonDefParam = self._addonSettings.getNonDefaultParams()
-                nonDefParam['appdir_xbmchome'] = special_home
-                self._addonSettings.setNonDefaultParams(nonDefParam)
-                baseDirectory = xbmc.translatePath('special://home/addons')
-            copySrcFile = shutil.copyfile
-        addonFiles = self.listAddonFiles(name)
-        for elem in addonFiles:
-            dstFile, mode, srcFile = elem
-            if not name:
-                dstFile = os.path.normpath(os.path.join(baseDirectory, dstFile))
-                dstDirectory = os.path.dirname(dstFile)
-                if not os.path.exists(dstDirectory): os.makedirs(dstDirectory)
+        addonFiles = self.listAddonFiles()
+        with zipfile.ZipFile(fp, 'w') as zipFile:
+            for elem in addonFiles:
+                dstFile, mode, srcFile = elem
+                try:
+                    fileContent = self.getPathContent((mode, srcFile))
+                    if not fileContent: continue
+                    zipFile.writestr(dstFile, fileContent)
+                except:
+                    errFile = dstFile.rpartition('\\')[2]
+                    errMsg += errFile + '\n'
+        if errMsg: raise Exception(errMsg)
+        fp.seek(0)
+        return fp
+
+    def mapVrtDisk(self, name=None):
+        if name is None:
             try:
-                fileContent = self.getPathContent((mode, srcFile))
-                if not fileContent: continue
-                if name:
-                    genFileFromStr(dstFile, fileContent)
-                else:
-                    with open(dstFile,'wb') as wfile:
-                        wfile.write(fileContent)
-            except:
-                errFile = dstFile.rpartition('\\')[2]
-                errMsg += errFile + '\n'
-        if name: zipFile.close()
-        addonId = self.addon_id()
-        addonName = self._addonSettings.getParam('addon_name')
-        if errMsg:
-            errMsg = 'During addon creation for ' + addonName + ' (' + addonId + ') , the following source files were not found: \n' + errMsg
+                import xbmc
+            except Exception as e:
+                tkMessageBox.showerror('Addon creation', str(e))
+            name = xbmc.translatePath('special://home/addons')
+        addonName, addonId = self._addonSettings.getParam('addon_name'),self.addon_id()
+        try:
+            fp = self.zipFileStr()
+        except Exception as e:
+            errMsg = 'During addon creation for ' + addonName + ' (' + addonId + ') , the following source files were not found: \n' + e
             tkMessageBox.showerror('Addon creation', errMsg)
         else:
-            errMsg = 'Addon for ' + addonName + ' (' + addonId + ') succesfully created'
-            tkMessageBox.showinfo('Addon creation', errMsg)
+            with contextlib.closing(fp):
+                try:
+                    if os.path.exists(name) and os.path.isdir(name):
+                        name = os.path.join(name, self.addon_id())
+                        zfile = zipfile.ZipFile(fp, 'r')
+                        zfile.extractall(name)
+                    else:
+                        with open(name, 'wb') as f:
+                            shutil.copyfileobj(fp, f)
+                except Exception as e:
+                    tkMessageBox.showerror('Addon creation', str(e))
+                else:
+                    errMsg = 'Addon for ' + addonName + ' (' + addonId + ') succesfully created'
+                    tkMessageBox.showinfo('Addon creation', errMsg)
+
 
     def listAddonFiles(self, name = None):
         fileList = self.getAddonTemplate()[1:]
@@ -267,7 +295,9 @@ class vrtDisk:
 
     def _getTypeSource(self, path):
         path = os.path.normpath(path)
-        path = path[5:].replace(os.path.sep, '/')
+        path = path.replace(os.path.sep, '/')
+        if path.startswith('vrt:/'):
+            path = os.path.relpath(path, 'vrt:/')
         fileMapping = dict(self.getAddonTemplate()[1:])
         test = fileMapping.get(path, None)
         if not test: raise IOError
@@ -397,27 +427,38 @@ class mountVrtDisk(vrtDisk):
 
 if __name__ == '__main__':
     # cargar el archivo de prueba
-    import json
-    import menuThreads
-    import xmlFileWrapper
+    name = os.path.abspath(r'./AddonsData/meta_project_free_tv.pck')
 
-    name = os.path.abspath(r'./AddonsData/path_hook_test.pck')
-    with open(name,'rb') as f:
-        kodiThreadData = json.loads(f.readline())
-        settings = json.loads(f.readline())
-        modifiedCode = json.loads(f.readline())
+    test = 'vrtDisk'
+    if test == 'vrtDisk':
+        mydisk = vrtDisk(file=name)
+        try:
+            fp = mydisk.zipFileStr()
+        except Exception as  errMsg:
+            print errMsg
+        else:
+            mydisk.mapVrtDisk(r'C:\testFiles\pic\test\plugin.test.tests.zip')
+    elif test == 'mountVrtDisk':
+        import json
+        import menuThreads
+        import xmlFileWrapper
 
-    xbmcThreads = menuThreads.menuThreads()
-    xbmcThreads.setThreadData(*kodiThreadData)
-    addonSettings = xmlFileWrapper.xmlFileWrapper('Addon_Settings.xml')
-    addonSettings.setNonDefaultParams(settings)
+        with open(name,'rb') as f:
+            kodiThreadData = json.loads(f.readline())
+            settings = json.loads(f.readline())
+            modifiedCode = json.loads(f.readline())
 
-    myVrtDisk = mountVrtDisk(xbmcThreads, addonSettings)
-    coder = myVrtDisk.getApiGenerator()
-    coder.modSourceCode = modifiedCode or {}
+        xbmcThreads = menuThreads.menuThreads()
+        xbmcThreads.setThreadData(*kodiThreadData)
+        addonSettings = xmlFileWrapper.xmlFileWrapper('Addon_Settings.xml')
+        addonSettings.setNonDefaultParams(settings)
 
-    myVrtDisk.installPathHook()
-    sys.path.insert(0, r'vrt:\plugin.video.projectfreetvide\resources\lib')
-    import adgMesh
-    print dir(adgMesh)
-    pass
+        myVrtDisk = mountVrtDisk(xbmcThreads, addonSettings)
+        coder = myVrtDisk.getApiGenerator()
+        coder.modSourceCode = modifiedCode or {}
+
+        myVrtDisk.installPathHook()
+        sys.path.insert(0, r'vrt:\plugin.video.projectfreetvide\resources\lib')
+        import adgMesh
+        print dir(adgMesh)
+        pass
