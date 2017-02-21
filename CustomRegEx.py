@@ -144,7 +144,7 @@ class ExtRegexParser(HTMLParser):
             posBeg, posEnd = tagList[n][0]
             tagAttr['*'] = data[posBeg:posEnd]
             tagAttr['*ParamPos*']['*'] = tagList[n][0]
-        elif n == None:
+        elif n is None:
             tagAttr['*'] = ''
             tagName = tagAttr['__TAG__']
             posBeg = posEnd = posEnd - len('</' + tagName + '>')
@@ -159,7 +159,7 @@ class ExtRegexParser(HTMLParser):
             while 1:
                 if tagList[indx][0][1] < tagList[k][0][1]:
                     dadList.append(k)
-                    if tagList[indx][1] == '*':tagList[k][2] = indx
+                    if tagList[indx][1] == '*': tagList[k][2] = indx
                     break
                 k = dadList[k]
 
@@ -342,24 +342,26 @@ class ExtRegexParser(HTMLParser):
         self.stackPath += '.' + tag
         self.tagList.append([(posini, posfin), tag, -1])
 
-    def storeDataStr(self, dSpanIn):
+    def storeDataStr(self, dataIn):
+        dSpanIn = self.getSpan(dataIn)
         if self.tagList and self.tagList[-1][1] == '*':
             dataSpan =  self.tagList[-1][0]
-            self.tagList[-1][0] = (dataSpan[0], dSpanIn[1])
-        else:
-            self.tagList.append([dSpanIn, '*', None])
+            if dataSpan[1] == dSpanIn[0]:
+                self.tagList[-1][0] = (dataSpan[0], dSpanIn[1])
+                return
+        if not dataIn.strip(' \t\n\r\f\v'):return
+        self.tagList.append([dSpanIn, '*', None])
 
     def handle_data(self, data):
-        posini, posfin = self.getSpan(data)
-        if data.strip(' \t\n\r\f\v'): self.storeDataStr((posini, posfin))
+        self.storeDataStr(data)
 
     def handle_entityref(self, name):
-        posini, posfin = self.getSpan('&%s;' % name)
-        self.storeDataStr((posini, posfin))
+        data = '&%s;' % name
+        self.storeDataStr(data)
 
     def handle_charref(self, name):
-        posini, posfin = self.getSpan('&#%s;' % name)
-        self.storeDataStr((posini, posfin))
+        data = '&#%s;' % name
+        self.storeDataStr(data)
 
     def handle_comment(self, data):
         posini, posfin = self.getSpan('<!--%s-->' % data)
@@ -1112,7 +1114,15 @@ if __name__ == "__main__":
 #   
 
     print '******* BEG ********' 
-    testing = "opVariables"      #"tagAttrTiming"
+    testing = "errortest"      #"tagAttrTiming"
+
+    if testing == "errortest":
+        htmlStr = '''
+<rexp id="nav_tabs" flags="re.DOTALL|re.IGNORECASE">&lt;li class="[un]*pressed"&gt;&lt;a href="(?P&lt;url&gt;[^"]+)" title="[WLP].+?"&gt;(?P&lt;label&gt;.+?)&lt;/a&gt;&lt;/li&gt;</rexp>
+        '''
+        pattern = r'(?#<rexp id="nav_tabs" flags=compflags *=regexp>)'
+        m = search(pattern, htmlStr)
+        print m.groups()
 
 
     if testing == "tagAttrTiming":

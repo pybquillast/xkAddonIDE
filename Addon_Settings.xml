@@ -1,18 +1,33 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
-  <category label="Addon">
-    <setting id="addon_id" type="text" label="ID:   " default="plugin.video.xbmcide"/>
-    <setting id="addon_name" type="text" label="Name:   " default="xbmcIDEdefault"/>
-    <setting id="addon_version" type="text" label="Version:   " default="1.0.0.0.0"/>
-    <setting id="addon_provider" type="text" label="Provider's Name:   " default="xbmcAddonIDE"/>
-    <setting id="addon_module" type="text" label="Initial script:   " default="default.py"/>
-    <setting type="lsep" label ="Provides:    "/>
-    <setting id="addon_video" type="bool" label ="Video" default="true"/>
-    <setting id="addon_music" type="bool" label ="Audio" default="false"/>
-    <setting id="addon_picture" type="bool" label ="Image" default="false"/>
-    <setting id="addon_program" type="bool" label ="Executable" default="false"/>
-    <setting id="addon_requires" type="optionlst" default="xbmc.python,2.1.0,|script.module.urlresolver,2.4.0," label="Requires" columnsheadings = "Description, Version, Optional" />  
-  </category>
+    <category label="Addon">
+        <setting id="addon_id" type="text" label="ID:   " default="plugin.video.xbmcide"/>
+        <setting id="addon_name" type="text" label="Name:   " default="xbmcIDEdefault"/>
+        <setting id="addon_version" type="text" label="Version:   " default="1.0.0.0.0"/>
+        <setting id="addon_provider" type="text" label="Provider's Name:   " default="xbmcAddonIDE"/>
+        <setting id="addon_requires" type="optionlst" default="xbmc.python,2.1.0,|script.module.urlresolver,2.4.0," label="Requires" columnsheadings = "Description, Version, Optional" />
+    </category>
+    <category label="Extension Points">
+        <setting type="lsep" label ="Extension Points:    "/>
+        <setting id="point_pluginsource" type="bool" label ="xbmc.python.pluginsource" default="true"/>
+        <setting id="point_module" type="bool" label ="xbmc.python.module" default="false"/>
+        <setting id="point_repository" type="bool" label ="xbmc.addon.repository" default="false"/>
+        <setting type="lsep" label ="Additional Information for:    "/>
+        <setting type="lsep" label ="    xbmc.python.pluginsource:    "/>
+        <setting id="addon_module" type="text" label="        Initial script:   " default="default.py" enable="eq(-5,true)"/>
+        <setting type="lsep" label ="        Provides:    "/>
+        <setting id="addon_video" type="bool" label ="            Video" default="true" enable="eq(-7,true)"/>
+        <setting id="addon_music" type="bool" label ="            Audio" default="false" enable="eq(-8,true)"/>
+        <setting id="addon_picture" type="bool" label ="            Image" default="false" enable="eq(-9,true)"/>
+        <setting id="addon_program" type="bool" label ="            Executable" default="false" enable="eq(-10,true)"/>
+        <setting type="lsep" label ="    xbmc.python.module:    "/>
+        <setting id="script_library" type="text" label="        Module library:   " default="lib" enable="eq(-11,true)"/>
+        <setting type="lsep" label ="xbmc.addon.repository:    "/>
+        <setting id="repository_info" type="text" label="    info:   " default="" enable="eq(-12,true)"/>
+        <setting id="repository_checksum" type="text" label="    checksum:   " default="" enable="eq(-13,true)"/>
+        <setting id="repository_datadir" type="text" label="    datadir:   " default="" enable="eq(-14,true)"/>
+
+    </category>
   <category label="Metadata">
     <setting id="addon_summary" type="text" label="Summary:   " default="Your summary here"/>
     <setting id="addon_description" type="text" label="Description:   " default="Your description here"/>

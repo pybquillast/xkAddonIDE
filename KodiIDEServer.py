@@ -91,12 +91,11 @@ def application (environ, start_response, server=None):
             queryStr= environ['wsgi.input'].read(length)
             testparams = dict(urlparse.parse_qsl(queryStr))
             server.testId = testparams['testId']
-            threadData = testparams['threadData']
-            settingsData = testparams['settingsData']
-            modifiedData = testparams['modifiedData']
-            server.vrtDisk.setVrtDiskData(settingsData.decode('base64'),
-                                          threadData.decode('base64'),
-                                          modifiedData.decode('base64'))
+            args = [testparams['threadData'], testparams['settingsData'], testparams['modifiedData']]
+            threadData, settingsData, modifiedData = map(lambda x: json.loads(x.decode('base64')), args)
+            server.vrtDisk.setVrtDiskData(settingsData,
+                                          threadData,
+                                          modifiedData)
 
         # try:
         #     cookie = Cookie.SimpleCookie(environ['HTTP_COOKIE'])

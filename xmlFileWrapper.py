@@ -74,7 +74,9 @@ class xmlFileWrapper():
         if not srchSett:
             settings = {}
             for elem in root.findall('.//setting[@default]'):
-                settings[elem.get('id')] = elem.get('default')
+                etype, key, value = elem.get('type'), elem.get('id'), elem.get('default')
+                if etype == 'bool': value = (value == 'true')
+                settings[key] = value
             settings.update(self.settings)
         else:
             if self.settings.has_key(srchSett): return self.settings[srchSett]
@@ -247,8 +249,9 @@ class settingsDisplay(tk.Frame):
         settings = self.xmlFileW.getNonDefaultParams()
         changedSettings = inChangedSettings or self.scrolled.getChangeSettings(settings)
         if action == 'Apply':
+            tonotify = changedSettings.keys() + changedSettings['reset']
             self.xmlFileW.processChangedSettings(changedSettings)
-            if self.notifyChange: self.notifyChange(True)
+            if self.notifyChange: self.notifyChange(True, tonotify)
         if action == 'Discard':
             widgets = self.changedWidgets(changedSettings)
             map(lambda w: w.setValue(settings.get(w.id, w.default)), widgets)

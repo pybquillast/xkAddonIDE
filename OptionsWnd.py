@@ -639,9 +639,9 @@ class settBool(baseWidget):
     def setGUI(self, options):
         tk.Label(self, text = options.get('label'), width=20, anchor=tk.NW).pack(side = tk.LEFT)
         self.id = options.get('id').lower()
-        self.default = True if options.get('default') == 'true' else False
+        self.default = options.get('default')=='true'
         self.setValue(self.default)
-        tk.Checkbutton(self, name = self.id, variable = self.value, onvalue = True, offvalue = False, anchor = tk.E).pack(side = tk.RIGHT, fill = tk.X, expand = 1)
+        tk.Checkbutton(self, name=self.id, variable=self.value, onvalue=True, offvalue=False, anchor=tk.E).pack(side = tk.RIGHT, fill = tk.X, expand = 1)
         
 
 class settSep(tk.Frame):
