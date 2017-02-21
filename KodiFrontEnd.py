@@ -163,11 +163,12 @@ class KodiFrontEnd(tk.Frame):
         self.urlParams = {}
         self.optHistory = [[0, '']]
         self.testAddon = self.vrtDisk.addon_id()
-        settingsData, threadData, modifiedData = self.vrtDisk.getVrtDiskData()
+        settingsData, threadData, modifiedData = map(lambda x: json.dumps(x).encode('base64'),
+                                                     self.vrtDisk.getVrtDiskData())
         self.reqData = {'testId':self.testAddon,
-                        'settingsData':settingsData.encode('base64'),
-                         'threadData':threadData.encode('base64'),
-                        'modifiedData':modifiedData.encode('base64')}
+                        'settingsData':settingsData,
+                        'threadData':threadData,
+                        'modifiedData':modifiedData}
 
     def do_popup(self, event):
         popup = tk.Menu(self, tearoff=False)

@@ -57,7 +57,6 @@ class XbmcAddonIDE(tk.Toplevel):
 
         self.xbmcThreads = menuThreads.menuThreads()
         self.addonSettings = xmlFileWrapper.xmlFileWrapper('Addon_Settings.xml')
-        self.addonSettings.getParam()
         self.vrtDisc = FileGenerator.vrtDisk(self.xbmcThreads, self.addonSettings)
         self.vrtDisc.setChangeMngr(self.setSaveFlag)
         self.coder = self.vrtDisc.getApiGenerator()
@@ -167,12 +166,12 @@ class XbmcAddonIDE(tk.Toplevel):
 
         self.setUpPaneCtrls()        
 
-        for elem in ['Settings', 'Design', 'Addon Explorer', 'Test']:
-            boton = tk.Radiobutton(viewPane, value=elem, text = elem, width = 15, variable = self.activeViewIndx, indicatoron = 0)
+        for elem in ['Settings', 'Addon Explorer', 'Test', 'Design']:
+            boton = tk.Radiobutton(viewPane, name=elem.lower(), value=elem, text = elem, width = 15, variable = self.activeViewIndx, indicatoron = 0)
             boton.pack(side = tk.LEFT)
 
         ''' Setting the views'''
-        self.activeViewIndx.set('Design')
+        self.activeViewIndx.set('Addon Explorer')
 
         self.menuBuilder()
 
@@ -1173,9 +1172,22 @@ class XbmcAddonIDE(tk.Toplevel):
         fileName = (self.currentFile if self.currentFile else 'default.pck')
         fileName = os.path.basename(fileName)
         self.title(fileName + suffix)
-        if lstChanged:
-            self.parseTree.refreshTreeInfo(lstChanged = lstChanged)
-            self.addonId.set(self.addonSettings.getParam('addon_id'))
+        if not lstChanged: return
+        addon_id = self.vrtDisc.addon_id()
+        settings = filter(lambda x: not x.startswith(addon_id), lstChanged)
+        if settings:
+            if 'addon_id' in settings:
+                self.addonId.set(self.addonSettings.getParam('addon_id'))
+            if 'point_pluginsource' in settings:
+                state = self.addonSettings.getParam('point_pluginsource')
+                if state:
+                    self.viewPaneOp.children['design'].pack(side=tk.LEFT)
+                else:
+                    self.viewPaneOp.children['design'].pack_forget()
+        nodes = [x for x in lstChanged if x not in settings]
+        if nodes:
+            self.parseTree.refreshTreeInfo(lstChanged = nodes)
+            # self.addonId.set(self.addonSettings.getParam('addon_id'))
 
     def importFile(self):
         name = tkFileDialog.askopenfilename(filetypes=[('xml Files', '*.xml'),('Text Files', '*.txt'), ('All Files', '*.*')])
@@ -1216,18 +1228,11 @@ class XbmcAddonIDE(tk.Toplevel):
         selUrl = formUrl + method + methodData 
         self.importUrl(initialValue = selUrl)
          
-    def newFile(self, fileName = '', threadData = None, modSourceCode = None , settings = None):
+    def newFile(self, fileName='', threadData=None, modSourceCode=None , settings=None):
         self.checkSaveFlag()
-        threadData = threadData or self.initThreadData()
-        self.xbmcThreads.setThreadData(*threadData)
 
-        addonSettings = settings or {}
-        if addonSettings.has_key('reset'): addonSettings.pop('reset')
-        self.addonSettings.setNonDefaultParams(addonSettings)
-
-        self.vrtDisc._filegenerator.modSourceCode = modSourceCode or []
+        self.vrtDisc.setVrtDiskData(settings, threadData, modSourceCode)
         self.parseTree.setXbmcThread(self.xbmcThreads)
-        
         self.explorerTree.refreshFlag = True
         self.setActiveView(refreshFlag = True)
 
@@ -1238,7 +1243,9 @@ class XbmcAddonIDE(tk.Toplevel):
         D = os.path.dirname(fileName)
         if D: self.ideSettings.setParam('appdir_data', D)
         self.currentFile = fileName
-        self.title(os.path.basename(self.currentFile))
+
+        settings = self.addonSettings.getParam()
+        self.setSaveFlag(False, settings.keys())
 
 
     def saveFile(self):

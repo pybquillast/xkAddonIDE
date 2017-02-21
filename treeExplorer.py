@@ -194,7 +194,9 @@ class treeExplorer(FilteredTree):
             toDelete = tuple(diff.difference(actualfiles))
             toAppend = diff.difference(treefiles)
             if activeNode not in toDelete:
-                activeNode = None
+                if self.treeview.set(activeNode, 'type').endswith('file') \
+                        and activeNode != templateRoot:
+                    activeNode = None
             else:
                 activeNode = templateRoot
             toAppend = sorted(map(lambda x: actualfiles.index(x), toAppend))
@@ -560,7 +562,8 @@ class treeExplorer(FilteredTree):
 
     def insertTreeElem(self, parentid, elemName, elemType, elemEditable, elemSource, refreshFlag=True):
         childId = SEP.join((parentid, elemName))
-        self.vrtDisc.modResources('insert', elemName, parentid, elemEditable, elemSource)
+        if elemSource:
+            self.vrtDisc.modResources('insert', elemName, parentid, elemEditable, elemSource)
         self.treeview.insert(parentid, 'end', iid = childId, text = elemName, values = (elemType, elemEditable, elemSource, '1.0' if elemType.endswith('file') else '' ))
         if refreshFlag: self.onTreeSelection(parentid)
 

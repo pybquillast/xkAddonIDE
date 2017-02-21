@@ -39,8 +39,14 @@ INFOLABELS_KEYS = [
                    'votes',           # string (12345 votes)
                    'trailer'          # string (/home/user/trailer.avi)
                    ]
+# Generate for constants
+FOR_ADDON      = 0x0001
+FOR_SCRIPT     = 0x0002
+FOR_REPOSITORY = 0x0004
 
 class addonFile(object):
+    generateFor = FOR_ADDON|FOR_SCRIPT|FOR_REPOSITORY
+
     def __init__(self, addonSettings, addonThreads):
         self._fileId = ''
         self._fileName = ''
@@ -493,7 +499,7 @@ def enum(*sequential, **named):
 ntype = enum('ROOT', 'NOTIMPLEMENTED', 'ONECHILD', 'MENU', 'APIMENU', 'JOIN', 'MULTIPLEXOR','APICATEGORY', 'PAGE', 'SEARCH', 'MEDIA')
 
 class addonFile_apimodule(addonFile):
-
+    generateFor = FOR_ADDON
     ERRORS = ''
 
     def __init__(self, addonSettings, addonThreads):
@@ -734,58 +740,77 @@ class addonFile_addonXmlFile(addonFile):
         return self.getAddonXmlFile(template, allSettings)
 
     def getAddonXmlFile(self, xmlTemplate, settings):
-        with open(xmlTemplate, 'r') as f:
-            xmlTemplate = f.read()
-        regexPatterns = ['"(.+?)"', '>([^<\W]+)<']       # [attribute, value]
-        for regexPattern in regexPatterns:
-            pos = 0
-            reg = re.compile(regexPattern)
-            while True:
-                match = reg.search(xmlTemplate, pos)
-                if not match: break
-                key = match.group(1)                  #reemplazar verdadero codigo
-                if settings.has_key(key):
-                    posINI = match.start(0) + 1
-                    posFIN = match.end(0) - 1
-                    value = settings[key]
-                    xmlTemplate = xmlTemplate[:posINI] + value + xmlTemplate[posFIN:]
-                    pos = posINI + len(value) + 1
-                else:
-                    pos = match.end(0)
+        SPACES = "    "
+        addonSettings = self.addonsettings.getParam()
+        xmlfile = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        # Addon Section
+        addontag = '\n<addon id="{addon_id}" name="{addon_name}" ' \
+                   'version="{addon_version}" provider-name="{addon_provider}">' \
+                   '<<innertag>>' \
+                   '\n</addon>'
+        xmlfile = xmlfile + addontag.format(**addonSettings)
 
-        # Sesion requires
-        regexPattern = "<requires>(.+?)\s*</requires>"
-        pos = 0
-        reg = re.compile(regexPattern, re.DOTALL)
-        match = reg.search(xmlTemplate, pos)
-        posINI = match.start(1)
-        posFIN = match.end(1)
-        template = match.group(1)
-        lista = [elem.split(',') for elem in settings['addon_requires'].split('|')]
+        # Requires Section
+        reqtemplate = '<import addon="{0}" version="{1}" optional="{2}"/>'
+        reqList = [elem.split(',') for elem in addonSettings['addon_requires'].split('|')]
+        reqLines = []
+        for k, elem in enumerate(reqList):
+            if len(elem) < 3 or elem[2] == '': elem = elem[:2] + ['false']
+            reqLines.append(reqtemplate.format(*elem).replace('optional="false"',''))
+        reqLines = '\n\t<requires>\n\t\t' + '\n\t\t'.join(reqLines) + '\n\t</requires>'
+        xmlfile = xmlfile.replace('<<innertag>>', reqLines + '<<innertag>>')
 
-        for k, elem in enumerate(lista):
-            if len(elem) < 3 or elem[2] == '': lista[k] = elem[:2] + ['false']
-            lista[k] = template.format(*lista[k]).replace('optional="false"','')
-        template = ''.join(lista)
-        xmlTemplate = xmlTemplate[:posINI] + template + xmlTemplate[posFIN:]
+        # Extention point Section
+        pointtemplate = '\n\t<extension point="{0}" library="{1}">'
+        if addonSettings['point_pluginsource']:
+            pluginsource = pointtemplate.format('xbmc.python.pluginsource', addonSettings['addon_module'])
+            values = ['video', 'music', 'picture', 'program']
+            innertags = ''
+            for value in values:
+                key = 'addon_' + value
+                if not addonSettings[key]: continue
+                innertags += '\n\t\t<provides>%s</provides>' % value
+            if innertags:
+                pluginsource = pluginsource + innertags + '\n\t</extension>'
+            else:
+                pluginsource = pluginsource.replace('>', '/>')
+            xmlfile = xmlfile.replace('<<innertag>>', pluginsource + '<<innertag>>')
 
-        # Sesion provides
-        attIds = ['addon_video', 'addon_music', 'addon_picture', 'addon_program']
-        attlabel = ['video', 'music', 'picture', 'program']
-        template = ''
-        for k, attId in enumerate(attIds):
-            if settings.get(attId) == 'true':
-                template += attlabel[k] + ' '
-        regexPattern = "<provides>(.+?)</provides>"
-        pos = 0
-        reg = re.compile(regexPattern, re.DOTALL)
-        match = reg.search(xmlTemplate, pos)
-        posINI = match.start(1)
-        posFIN = match.end(1)
-        xmlTemplate = xmlTemplate[:posINI] + template.strip() + xmlTemplate[posFIN:]
-        return xmlTemplate
+        if addonSettings['point_module']:
+            pointmodule = pointtemplate.format('xbmc.python.module', addonSettings['script_library'])
+            pointmodule = pointmodule.replace('>', '/>')
+            xmlfile = xmlfile.replace('<<innertag>>', pointmodule + '<<innertag>>')
+
+        if addonSettings['point_repository']:
+            pointrepository = '\n\t<extension point="xbmc.addon.repository">'
+            tags = ['info', 'checksum', 'datadir']
+            innertags = ''
+            for tag in tags:
+                key = 'repository_' + tag
+                value = addonSettings[key]
+                innertags += '\n\t\t<{0}>{1}</{0}>'.format(tag, value)
+            pointrepository = pointrepository + innertags + '\n\t</extension>'
+            xmlfile = xmlfile.replace('<<innertag>>', pointrepository + '<<innertag>>')
+
+        pointmetadata = '\n\t<extension point="xbmc.addon.metadata">'
+        innertags = ''
+        tags = ['summary', 'description', 'disclaimer']
+        for tag in tags:
+            key = 'addon_' + tag
+            value = addonSettings[key]
+            innertags += '\n\t\t<{0} lang="en">{1}</{0}>'.format(tag, value)
+        tags = ['language', 'platform', 'license', 'forum', 'website', 'email', 'source']
+        for tag in tags:
+            key = 'addon_' + tag
+            value = addonSettings[key]
+            innertags += '\n\t\t<{0}>{1}</{0}>'.format(tag, value)
+        pointmetadata = pointmetadata + innertags + '\n\t</extension>'
+        xmlfile = xmlfile.replace('<<innertag>>', pointmetadata) + '\n'
+        xmlfile = xmlfile.replace('\t', SPACES)
+        return xmlfile
 
 class addonFile_locStringsFile(addonFile):
+    generateFor = FOR_ADDON
     def __init__(self, addonSettings, addonThreads):
         addonFile.__init__(self, addonSettings, addonThreads)
         self._fileId = 'addon_locstring'
@@ -817,6 +842,7 @@ class addonFile_locStringsFile(addonFile):
         return content
 
 class addonFile_regExpFile(addonFile):
+    generateFor = FOR_ADDON
 
     def __init__(self, addonSettings, addonThreads):
         addonFile.__init__(self, addonSettings, addonThreads)
@@ -906,6 +932,8 @@ class addonFile_licenseFile(addonFile):
         self.modSourceCode = content or ''
 
 class addonFile_settingsFile(addonFile):
+    generateFor = FOR_ADDON|FOR_SCRIPT
+
     def __init__(self, addonSettings, addonThreads):
         addonFile.__init__(self, addonSettings, addonThreads)
         self._fileId = 'addon_settings'
@@ -921,6 +949,7 @@ class addonFile_settingsFile(addonFile):
         self.modSourceCode = content or ''
 
 class addonFile_changeLogFile(addonFile):
+    generateFor = FOR_ADDON|FOR_SCRIPT
     def __init__(self, addonSettings, addonThreads):
         addonFile.__init__(self, addonSettings, addonThreads)
         self._fileId = 'addon_changelog'

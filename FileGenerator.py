@@ -26,17 +26,16 @@ IMAGEFILES = ['.bmp', '.dcx', '.eps', '.gif', '.im', '.jpg', '.jpeg', '.pcd', '.
 
 class FileGenerator(object):
     def __init__(self, addonSettings, addonThreads):
-        self._fileGenerators = {}
-        self.editableFiles = []
-        fileGen = addonSettings.getParam('filegen') or 'Basic'
+        self.addonsettings = addonSettings
+        self.addonthreads = addonThreads
+        self.filesfilter = 0
+        settings = addonSettings.getParam()
+        fileGen = settings.get('filegen') or 'Basic'
         module = __import__('Coders.%s' % fileGen)
         module = getattr(module, fileGen)
-        fileObjets = module.__dict__
-        fileClass = [fileGen for fileGen in fileObjets.keys() if fileGen.startswith('addonFile_')]
-        for fileGen in fileClass:
-            fileObj = fileObjets[fileGen](addonSettings, addonThreads)
-            self.addFile(fileObj)
-            if fileObj.isEditable: self.editableFiles.append(fileObj.fileId)
+        modeObjets = dir(module)
+        self.fileClasses = [getattr(module, fileclass) for fileclass in modeObjets if fileclass.startswith('addonFile_')]
+        self.getFileInstances()
         pass
 
     def modSourceCodeGetter(self):
@@ -65,12 +64,32 @@ class FileGenerator(object):
     def getAddonModule(self):
         return self._fileGenerators['addon_module']
 
-    def listFiles(self):
-        return [ value.getFileMetaData() for value in self._fileGenerators.values()]
+    def getFileInstances(self):
+        addonSettings = self.addonsettings
+        addonThreads = self.addonthreads
+        settings = addonSettings.getParam()
+        fileClasses = self.fileClasses
+        filesfilter = 0
+        for value, key in ((1, 'point_pluginsource'),
+                           (2, 'point_module'),
+                           (4, 'point_repository')):
+            if settings[key]:
+                filesfilter +=  value
+        if self.filesfilter == filesfilter: return
+        self.filesfilter = filesfilter
+        self._fileGenerators = {}
+        self.editableFiles = []
+        for fileclass in fileClasses:
+            if fileclass.generateFor & filesfilter:
+                fileInst = fileclass(addonSettings, addonThreads)
+                filemetadata = fileInst.getFileMetaData()
+                fileId = filemetadata[0]
+                self._fileGenerators[fileId] = fileInst
+                if fileInst.isEditable: self.editableFiles.append(fileInst.fileId)
 
-    def addFile(self, fileObject):
-        fileId = fileObject.getFileMetaData()[0]
-        self._fileGenerators[fileId] = fileObject
+    def listFiles(self):
+        self.getFileInstances()
+        return [ value.getFileMetaData() for value in self._fileGenerators.values()]
 
     def getSource(self, fileId):
         fileGen = self._fileGenerators[fileId]
@@ -130,23 +149,28 @@ class vrtDisk:
         addonTemplate = [x[0] for x in self.getAddonTemplate()[1:]]
         return fileName[5:].replace(os.path.sep, '/') in addonTemplate
 
-    def setVrtDiskData(self, newsettings='', threaddata='', modifiedcode=''):
-        if threaddata:
-            threaddata = json.loads(threaddata)
-            self._menuthreads.setThreadData(*threaddata)
-        if newsettings:
-            newsettings = json.loads(newsettings)
-            self._addonSettings.setNonDefaultParams(newsettings)
-        if modifiedcode:
-            coder = self.getApiGenerator()
-            modifiedcode = json.loads(modifiedcode)
-            coder.modSourceCode = modifiedcode
+    def setVrtDiskData(self, newsettings=None, threaddata=None, modifiedcode=None):
+        threaddata = threaddata or self.initThreadData().getThreadData()
+        self._menuthreads.setThreadData(*threaddata)
+
+        newsettings = newsettings or {}
+        if newsettings.has_key('reset'):
+            toReset = addonSettings.pop('reset')
+            for key in toReset:
+                newsettings.pop(key)
+        self._addonSettings.setNonDefaultParams(newsettings)
+        fileGenerator = self.getFileGenerator()
+        fileGenerator.getFileInstances()
+
+        modifiedcode = modifiedcode or []
+        coder = self.getFileGenerator()
+        coder.modSourceCode = modifiedcode
 
     def getVrtDiskData(self):
-        settings = json.dumps(self._addonSettings.getNonDefaultParams())
-        threadData = json.dumps(self._menuthreads.getThreadData())
-        coder = self.getApiGenerator()
-        modsource = json.dumps(coder.modSourceCode)
+        settings = self._addonSettings.getNonDefaultParams()
+        threadData = self._menuthreads.getThreadData()
+        coder = self.getFileGenerator()
+        modsource = coder.modSourceCode
         return (settings, threadData, modsource)
 
     def addon_id(self):
@@ -182,9 +206,13 @@ class vrtDisk:
             if source:
                 addonTemplate.append([fileName, {'type':'file', 'editable':True, 'source':source}])
 
-        resources = getData(addonSettings.getParam('addon_resources'))
+        addon_resources = addonSettings.getParam('addon_resources')
+        resources = getData(addon_resources) if addon_resources else []
         for elem in resources:
-            fileName, fileLoc, isEditable, source = elem
+            try:
+                fileName, fileLoc, isEditable, source = elem
+            except:
+                continue
             fileLoc = getFileLoc(fileLoc,fileName)
             isEditable = isEditable or 'True'
             source = source or fileName
@@ -196,7 +224,7 @@ class vrtDisk:
             fileLoc = getFileLoc('Dependencies',fileName)
             addonTemplate.append([fileLoc, {'type':'depdir', 'editable':False, 'source':fileName, 'inspos':fileVer}])
 
-        addonTemplate.insert(0,addonTemplate.pop(0) + "/" + addonSettings.getParam('addon_module'))
+        addonTemplate.insert(0,addonTemplate.pop(0) + "/addon.xml")
         return addonTemplate
 
     def modResources(self, modType, fileName, location, isEditable, fileSource):
@@ -269,13 +297,12 @@ class vrtDisk:
         try:
             fp = self.zipFileStr()
         except Exception as e:
-            errMsg = 'During addon creation for ' + addonName + ' (' + addonId + ') , the following source files were not found: \n' + e
+            errMsg = 'During addon creation for ' + addonName + ' (' + addonId + ') , the following source files were not found: \n' + str(e)
             tkMessageBox.showerror('Addon creation', errMsg)
         else:
             with contextlib.closing(fp):
                 try:
                     if os.path.exists(name) and os.path.isdir(name):
-                        name = os.path.join(name, self.addon_id())
                         zfile = zipfile.ZipFile(fp, 'r')
                         zfile.extractall(name)
                     else:
@@ -295,9 +322,9 @@ class vrtDisk:
 
     def _getTypeSource(self, path):
         path = os.path.normpath(path)
+        if path.startswith('vrt:'):
+            path = os.path.relpath(path, 'vrt:')
         path = path.replace(os.path.sep, '/')
-        if path.startswith('vrt:/'):
-            path = os.path.relpath(path, 'vrt:/')
         fileMapping = dict(self.getAddonTemplate()[1:])
         test = fileMapping.get(path, None)
         if not test: raise IOError
