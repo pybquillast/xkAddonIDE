@@ -1,6 +1,10 @@
 import re
 import os
 import urllib
+import zipfile
+import FileGenerator
+import hashlib
+import json
 from xml.sax.saxutils import quoteattr
 import CustomRegEx
 
@@ -52,6 +56,7 @@ class addonFile(object):
         self._fileName = ''
         self._location = ""
         self._isEditable = False
+        self._asociatedFiles = None
         self.threads = addonThreads
         self.addonsettings = addonSettings
         self._defConstructor = dict
@@ -783,12 +788,15 @@ class addonFile_addonXmlFile(addonFile):
 
         if addonSettings['point_repository']:
             pointrepository = '\n\t<extension point="xbmc.addon.repository">'
+            gats = [('<info  compressed="false">', '</info>'),
+                    ('<checksum>', '</checksum>'),
+                    ('<datadir zip="true">', '</datadir>')]
             tags = ['info', 'checksum', 'datadir']
             innertags = ''
-            for tag in tags:
+            for tag, gat in zip(tags, gats):
                 key = 'repository_' + tag
                 value = addonSettings[key]
-                innertags += '\n\t\t<{0}>{1}</{0}>'.format(tag, value)
+                innertags += '\n\t\t{1}{0}{2}'.format(value, *gat)
             pointrepository = pointrepository + innertags + '\n\t</extension>'
             xmlfile = xmlfile.replace('<<innertag>>', pointrepository + '<<innertag>>')
 
@@ -901,6 +909,7 @@ class addonFile_regExpFile(addonFile):
         return content
 
 class addonFile_licenseFile(addonFile):
+    generateFor = FOR_ADDON|FOR_SCRIPT
     def __init__(self, addonSettings, addonThreads):
         addonFile.__init__(self, addonSettings, addonThreads)
         self._fileId = 'addon_license'
@@ -964,3 +973,67 @@ class addonFile_changeLogFile(addonFile):
     def setSource(self, content, isPartialMod=False):
         self.modSourceCode = content or ''
 
+class addonFile_repAddonXmlFile(addonFile):
+    generateFor = FOR_REPOSITORY
+    def __init__(self, addonSettings, addonThreads):
+        addonFile.__init__(self, addonSettings, addonThreads)
+        self.key = ''
+        self._fileId = 'repo_addonxml'
+        self._fileName = 'addons.xml'
+        self._location = "datadir"
+        self._isEditable = False
+        self._asociatedFiles = [('repo_addonxml::getFileMd5Hash', 'addons.xml.md5', 'datadir', False)]
+        self._defConstructor = str
+
+    def getSource(self):
+        location = self._location
+        getData = lambda setting: [map(lambda x: x.strip(), elem.split(',')) for elem in setting.split('|')]
+        addon_resources = self.addonsettings.getParam('addon_resources')
+        resources = getData(addon_resources) if addon_resources else []
+        resources = filter(lambda x: x[0] == 'addon.xml' and x[1].startswith(location), resources)
+        key = json.dumps(resources)
+        key = self.generateKey(key, 10)
+        if key != self.key:
+            self.key = key
+            self.modSourceCode = filebody = self.refreshFileContent(resources)
+            self.md5hash = self.generateKey(filebody)
+        else:
+            filebody = self.modSourceCode
+        return filebody or None
+
+    def getFileMd5Hash(self):
+        self.getSource()
+        return self.md5hash
+
+    def generateKey(self, key, span=None):
+        keyhash = hashlib.md5(key).hexdigest()
+        if span:
+            keyhash = keyhash[:span]
+        return keyhash
+
+    def refreshFileContent(self, resources):
+        filebody = ''
+        for item in resources:
+            filename, fileloc, iseditable, filesource = item
+            if '::' in filesource:
+                archfile, filesource = filesource.split('::')
+                if archfile.endswith('.zip'):
+                    zfile = zipfile.ZipFile(archfile)
+                    addonxmlstr = zfile.read(filesource)
+                elif archfile.endswith('.pck'):
+                    zfile = FileGenerator.vrtDisk(file=archfile)
+                    addonxmlstr = zfile.getPathContent(filesource)
+            else:
+                with open(filesource, 'rb') as fp:
+                    addonxmlstr = fp.read()
+            addonxmlstr = re.sub(r'<\?xml.+?\?>', '', addonxmlstr).rstrip()
+            addonxmlstr = addonxmlstr.replace('\n', '\n\t')
+            filebody += addonxmlstr
+        if filebody:
+            xmlheader = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            filebody = filebody.replace('\t', '    ')
+            filebody = '%s\n<addons>\n%s\n</addons>' % (xmlheader, filebody.strip('\n'))
+        return filebody
+
+    def setSource(self, content, isPartialMod=False):
+        self.modSourceCode = content or ''

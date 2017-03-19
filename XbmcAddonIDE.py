@@ -30,6 +30,7 @@ import resolverTools
 import teleresolvers
 import treeExplorer
 import xmlFileWrapper
+import network
 from OptionsWnd import AppSettingDialog
 from ParseThreads import RegexpFrame, EditTransaction, StatusBar, addonFilesViewer
 
@@ -430,10 +431,6 @@ class XbmcAddonIDE(tk.Toplevel):
         menuOpt.append(('command', 'Link','Ctrl+A', 0, self.newLink))
         self.makeMenu('design_edit.Insert_New', menuOpt)
         self.makeMenu('nav_menu_edit.Insert_New', menuOpt)
-        # menuOpt = []
-        # menuOpt.append(('command', 'New','Ctrl+S', 0, self.newParseKnot))
-        # menuOpt.append(('command', 'Set ActiveKnoth','Ctrl+A', 0, self.setActiveKnot))
-        # self.makeMenu('Knoth', menuOpt)
 
         menuOpt = []
         menuOpt.append(('checkbutton', 'Toggle Left Pane View', self.leftPaneVisible,[False, True]))
@@ -505,6 +502,9 @@ class XbmcAddonIDE(tk.Toplevel):
         master = self.menuBar[menuId]
         frstIndx, lstIndx = 7,  tk.END
         master.delete(frstIndx, lstIndx)
+        point_repository = self.addonSettings.getParam('point_repository')
+        if point_repository and point_repository != 'false':
+            master.add('command', label='Sincronize Repository', command=self.sincronizeRepo)
         if activeView == 'Design':
             master.add('separator')
             for mLabel in ['edit', 'get', 'tools']:
@@ -529,7 +529,10 @@ class XbmcAddonIDE(tk.Toplevel):
         master.add('separator')
         master.add('command', label='Close',accelerator='Alt+Q', underline=0, command=self.Close)
 
-
+    def sincronizeRepo(self):
+        self.vrtDisc.sincronizeRepoTo(host='files.000webhost.com',
+                                      user='kodiaddonidenet',
+                                      password='alexmontesbarrios62')
 
     def deOfuscate(self, tipo):
         content =  self.regexpEd.getContent()

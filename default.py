@@ -84,6 +84,7 @@ def buscar():      # Modified code
 
 
 
+
 def pwire_copy():
     url = args.get("url")[0]
     footmenu = getRegexFor("pwire_copy", type="rfoot", dir=_data)
@@ -283,9 +284,11 @@ def media():      # Modified code
     if not url.startswith("http://www.primewire.ag"):
         videoUrl = url
     else:
+        # Pero hay tema de los falsos positivos
         regexp = '<noframes>(?P<videourl>[^<]+)</noframes>'
         compflags =re.DOTALL
         url, data = openUrl(url)
+        # Este es un comentario agregado en default.py
         subMenus = parseUrlContent(url, data, regexp, compflags )
         videoUrl = subMenus[0]["videourl"]
     try:
@@ -302,6 +305,7 @@ def media():      # Modified code
 
 
 
+
 base_url = sys.argv[0]
 addon_handle = int(sys.argv[1])
 args = urlparse.parse_qs(sys.argv[2][1:])
@@ -310,5 +314,4 @@ xbmcplugin.setContent(addon_handle, 'movies')
 menu = args.get('menu', ['rootmenu'])[0]
 menuFunc = globals()[menu]
 menuItems = menuFunc()
-if menuItems: makeXbmcMenu(addon_handle, base_url, menuItems)    
-
+if menuItems: makeXbmcMenu(addon_handle, base_url, menuItems)

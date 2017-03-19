@@ -11,12 +11,16 @@ import os
 import tkMessageBox
 import zipfile
 import shutil
+import operator
 import tkFileDialog
 import sys
 import imp
 import urllib
 import contextlib
 import StringIO
+import network
+import ftplib
+import urlparse
 import menuThreads
 import xmlFileWrapper
 import json
@@ -80,16 +84,21 @@ class FileGenerator(object):
         self._fileGenerators = {}
         self.editableFiles = []
         for fileclass in fileClasses:
-            if fileclass.generateFor & filesfilter:
-                fileInst = fileclass(addonSettings, addonThreads)
-                filemetadata = fileInst.getFileMetaData()
-                fileId = filemetadata[0]
-                self._fileGenerators[fileId] = fileInst
-                if fileInst.isEditable: self.editableFiles.append(fileInst.fileId)
+            if not fileclass.generateFor & filesfilter: continue
+            fileInst = fileclass(addonSettings, addonThreads)
+            filemetadata = fileInst.getFileMetaData()
+            fileId = filemetadata[0]
+            self._fileGenerators[fileId] = fileInst
+            if fileInst.isEditable: self.editableFiles.append(fileInst.fileId)
 
     def listFiles(self):
         self.getFileInstances()
-        return [ value.getFileMetaData() for value in self._fileGenerators.values()]
+        answ = []
+        for fileInst in self._fileGenerators.values():
+            answ.append(fileInst.getFileMetaData())
+            if fileInst._asociatedFiles:
+                answ.extend(fileInst._asociatedFiles)
+        return answ
 
     def getSource(self, fileId):
         fileGen = self._fileGenerators[fileId]
@@ -199,9 +208,9 @@ class vrtDisk:
             fileLoc = getFileLoc(fileLoc,fileName)
             addonTemplate.append([fileLoc, {'type':'genfile', 'editable':isEditable, 'source':fileId, 'inspos':'1.0'}])
 
-        rootFiles = [('addon_icon', 'icon.png'),        ('addon_fanart', 'fanart.jpg')]
+        optionalfiles = [('addon_icon', 'icon.png'),        ('addon_fanart', 'fanart.jpg')]
 
-        for key, fileName in rootFiles:
+        for key, fileName in optionalfiles:
             source = addonSettings.getParam(key)
             if source:
                 addonTemplate.append([fileName, {'type':'file', 'editable':True, 'source':source}])
@@ -225,24 +234,58 @@ class vrtDisk:
             addonTemplate.append([fileLoc, {'type':'depdir', 'editable':False, 'source':fileName, 'inspos':fileVer}])
 
         addonTemplate.insert(0,addonTemplate.pop(0) + "/addon.xml")
+
         return addonTemplate
+
+    def getRequiredDirectories(self):
+        addonSettings = self._addonSettings
+        reqDirectories = {'point_pluginsource': ['resources/media', 'Dependencies'],
+                          'point_module': [addonSettings.getParam('script_library'), 'Dependencies'],
+                          'point_repository': ['datadir']}
+        reqdirs = set()
+        for key, dirs in reqDirectories.items():
+            bFlag = addonSettings.getParam(key)
+            if isinstance(bFlag, basestring):
+                bFlag = bFlag == 'true'
+            if bFlag:
+                reqdirs.update(dirs)
+        directories = []
+        dirtypes = {'Dependencies':'depdir', 'datadir':'repdatadir'}
+        for key in sorted(reqdirs):
+            dirtype = dirtypes.get(key, 'reqdir')
+            directories.append([key, {'type': dirtype, 'editable':False, 'source':''}])
+
+        rootId = self.addon_id()
+        directories = [(rootId + SEP + key, value) for key, value in directories]
+
+        return directories
+
 
     def modResources(self, modType, fileName, location, isEditable, fileSource):
         addonResources = self._addonSettings.getParam('addon_resources')
+        addonResources = map(lambda x: x.split(','), addonResources.split('|'))
+        addonid = len(self.addon_id()) + 1
         if modType == 'insert':
-            location = location.partition(SEP)[2]
+            location = location[addonid:]
             nFileSource = os.path.normpath(fileSource)
             if nFileSource.startswith(os.getcwd()): fileSource = fileSource[len(os.getcwd())+1:]
-            addonResources = '|'.join([addonResources, ','.join([fileName, location, str(isEditable), fileSource])])
+            addonResources.append([fileName, location, str(isEditable), fileSource])
         elif modType == 'delete':
-            fileName = fileName.rpartition(SEP)[2]
-            pattern = '\|* *' + fileName + ',[^|]+'
-            toRep = re.compile(pattern)
-            addonResources = toRep.sub('', addonResources)
+            fileName = fileName[addonid:]
+            trnfunc = lambda x: not SEP.join([x[1], x[0]]).startswith(fileName)
+            addonResources = filter(trnfunc, addonResources)
         elif modType == 'rename':
-            fileName = fileName.rpartition(SEP)[2]
-            addonResources = addonResources.replace(fileName + ',', fileSource + ',')
+            fileName = fileName[addonid:]
+            replName = SEP.join([fileName.rpartition(SEP)[2], fileSource])
+            for item in addonResources:
+                itemid = SEP.join([item[1], item[0]])
+                if itemid == fileName:
+                    item[0] = fileSource
+                    break
+                if item[1].startswith(fileName):
+                    item[1] = item[1].replace(fileName, replName)
             pass
+        addonResources = '|'.join([','.join(item) for item in addonResources])
         self._addonSettings.settings['addon_resources'] = addonResources
         self._addonSettings.refreshFlag = True
         self.reportChanges()
@@ -265,13 +308,20 @@ class vrtDisk:
         apiGenerator = self.getFileGenerator()
         return apiGenerator.getAddonModule()
 
-    def getFileGenerator(self):
+    def getFileGenerator(self, fileId=None):
         return self._filegenerator
+
+    def getGeneratorFor(self, fileId):
+        fgen = self.getFileGenerator()
+        return fgen._fileGenerators[fileId]
 
     def zipFileStr(self):
         fp = StringIO.StringIO()
         errMsg = ''
         addonFiles = self.listAddonFiles()
+        if self._addonSettings.getParam('point_repository'):
+            repodir = '%s/datadir' % self.addon_id()
+            addonFiles = filter(lambda x: not x[0].startswith(repodir), addonFiles)
         with zipfile.ZipFile(fp, 'w') as zipFile:
             for elem in addonFiles:
                 dstFile, mode, srcFile = elem
@@ -286,6 +336,212 @@ class vrtDisk:
         fp.seek(0)
         return fp
 
+    def sincronizeRepoTo(self, host, user, password, datadir='/public_html/'):
+        addonSettings = self._addonSettings
+        if not addonSettings.getParam('point_repository'): return
+        net = network.network()
+        checksum_dir = addonSettings.getParam('repository_checksum')
+        try:
+            repo_checksum = net.openUrl(checksum_dir)[0]
+        except:
+            repo_checksum = ''
+        repository_checksum =  '%s/datadir/addons.xml.md5' % self.addon_id()
+        repository_checksum = self.getPathContent(repository_checksum)
+        if repo_checksum == repository_checksum.decode('utf-8'):
+            return tkMessageBox.showinfo('Sincronize Repository', 'Repository is updated')
+
+        pattern = r'(?#<addon id=id name=name version=version>)'
+        info_dir = addonSettings.getParam('repository_info')
+        try:
+            repo_info = net.openUrl(info_dir)[0]
+        except:
+            repo_info = []
+        else:
+            repo_info = CustomRegEx.findall(pattern, repo_info)
+            repo_info = [item[0] + '+' + item[2] for item in repo_info]
+        repository_info =  '%s/datadir/addons.xml' % self.addon_id()
+        repository_info = self.getPathContent(repository_info)
+        real_info = CustomRegEx.findall(pattern, repository_info)
+        real_info = [item[0] + '+' + item[2] for item in real_info]
+
+        toDelete = set(repo_info).difference(real_info)
+        toDelete = [item[:item.find('+')]  for item in toDelete]
+        toAdd = set(real_info).difference(repo_info)
+        toAdd = [item[:item.find('+')]  for item in toAdd]
+        toUpdate = set(toAdd).intersection(toDelete)
+        toAdd = set(toAdd).difference(toUpdate)
+        toDelete = set(toDelete).difference(toUpdate)
+        toRename = set()
+
+        ftp = ftplib.FTP(host=host, user=user, passwd=password)
+        repository_datadir = addonSettings.getParam('repository_datadir')
+        repository_datadir = urlparse.urlparse(repository_datadir).path.strip('/')
+        relativedir = repository_datadir.strip('/')
+        dirname = '/' + datadir.strip('/')
+        while relativedir:
+            adir, relativedir = relativedir.split('/', 1)
+            dirname += '/' + adir
+            try:
+                ftp.cwd(dirname)
+            except:
+                ftp.mkd(dirname)
+
+        ftp.cwd(datadir)
+        for item in toUpdate:
+            files = filter(lambda x: x not in ['.', '..'], ftp.nlst(item))
+            map(lambda x: ftp.rename(item + '/' + x, item + '/' + x + '.bak'), files)
+
+        datadirLst= ftp.nlst()
+        addonFiles = self.listAddonFiles()
+        repodir = '%s/datadir' % self.addon_id()
+        addonFiles = filter(lambda x: x[0].startswith(repodir), addonFiles)
+        fltfnc = lambda x: os.path.dirname(x[0][len(repodir)+1:]) in toAdd.union(toUpdate)
+        addonFiles = sorted(filter(fltfnc, addonFiles))
+
+        moddir = set()
+        for elem in addonFiles:
+            dstFile, mode, srcFile = elem
+            try:
+                if not os.path.isdir(srcFile):
+                    if srcFile.endswith('.zip'):
+                        fp = StringIO.StringIO()
+                        with open(srcFile, 'rb') as f:
+                            fp.write(f.read())
+                    else:
+                        try:
+                            fileContent = self.getPathContent((mode, srcFile))
+                        except:
+                            fileContent = None
+                        if not fileContent: continue
+                        if srcFile.endswith('.pck'):
+                            fobj = fileContent
+                            fp = fobj.zipFileStr()
+                        else:
+                            fp = StringIO.StringIO(fileContent)
+                else:
+                    excludedext= ('.pyo', '.pyc')
+                    fp = StringIO.StringIO()
+                    rootDir = os.path.dirname(srcFile)
+                    zfile = zipfile.ZipFile(fp, 'w')
+                    for dirname, subshere, fileshere in os.walk(srcFile):
+                        for fname in fileshere:
+                            if os.path.splitext(fname)[1] in excludedext: continue
+                            fname = os.path.join(dirname, fname)
+                            aname = os.path.relpath(fname, rootDir)
+                            zfile.write(fname, aname)
+                    zfile.close()
+                fp.seek(0)
+                basedir, filename = os.path.split(dstFile)
+                basedir = basedir[len(repodir)+1:]
+                if basedir not in datadirLst:
+                    datadirLst.append(ftp.mkd(basedir))
+                ftp.storbinary('STOR %s/%s' % (basedir, filename), fp)
+                moddir.add(basedir)
+            except:
+                toDelete = moddir.difference(toUpdate)
+                toRename = toUpdate.difference(moddir)
+                bSuccess = False
+            else:
+                toRename = toUpdate
+                bSuccess = True
+
+        if not bSuccess:
+            for item in toRename:
+                files = filter(lambda x: x not in ['.', '..'] and not x.endswith('.bak'), ftp.nlst(item))
+                map(lambda x: ftp.delete(item + '/' + x), files)
+            for item in toRename:
+                files = filter(lambda x: not x.endswith('.bak'), ftp.nlst(item))
+                map(lambda x: ftp.rename(item + '/' + x, item + '/' + x[:-4]), files)
+            return tkMessageBox('Sincronize Repo', 'While updating the repository addons '
+                                                   'an error has ocurred')
+
+        repo_pairs = [(info_dir, 'addons.xml', repository_info),
+                      (checksum_dir, 'addons.xml.md5', repository_checksum)]
+        try:
+            for itemdir, itemname, itemcontent in repo_pairs:
+                itemdir = '/' + datadir.strip('/') + '/' + urlparse.urlparse(itemdir).path.lstrip('/')
+                ftp.rename('/'.join(itemdir, itemname), '/'.join(itemdir, itemname + '.bak'))
+                fp = StringIO.StringIO(itemcontent)
+                ftp.storbinary('STOR %s/%s' % (itemdir, itemname), fp)
+        except:
+            for itemdir, itemname, itemcontent in repo_pairs:
+                try:
+                    ftp.delete('/'.join(itemdir, itemname))
+                except:
+                    break
+                else:
+                    ftp.rename('/'.join(itemdir, itemname + '.bak'), '/'.join(itemdir, itemname))
+            for item in toRename:
+                files = filter(lambda x: x not in ['.', '..'] and not x.endswith('.bak'), ftp.nlst(item))
+                map(lambda x: ftp.delete(item + '/' + x), files)
+            for item in toRename:
+                files = filter(lambda x: not x.endswith('.bak'), ftp.nlst(item))
+                map(lambda x: ftp.rename(item + '/' + x, item + '/' + x[:-4]), files)
+            return tkMessageBox('Sincronize Repo', 'While updating the repository info/checksum '
+                                                   'an error has ocurred')
+        for item in toRename:
+            files = filter(lambda x: not x.endswith('.bak'), ftp.nlst(item))
+            map(lambda x: ftp.delete(item + '/' + x), files)
+        for item in toDelete:
+            files = filter(lambda x: x not in ['.', '..'], ftp.nlst(item))
+            map(lambda x: ftp.delete(item + '/' + x), files)
+            ftp.rmd(item)
+        return tkMessageBox('Sincronize Repo', 'Repository successfully updated')
+
+    def repositoryFile(self):
+        if not self._addonSettings.getParam('point_repository'): return
+        addonFiles = self.listAddonFiles()
+        repodir = '%s/datadir' % self.addon_id()
+        addonXmlFile = '%s/datadir/addon.xml' % self.addon_id()
+        addonXmlMd5File = '%s/datadir/addon.xml.md5' % self.addon_id()
+        addonFiles = filter(lambda x: x[0].startswith(repodir), addonFiles)
+        datadir = self._addonSettings.getParam('repository_datadir')
+        redirect = {addonXmlFile: self._addonSettings.getParam('repository_info'),
+                    addonXmlMd5File: self._addonSettings.getParam('repository_checksum')}
+        errMsg = ''
+        for elem in addonFiles:
+            dstFile, mode, srcFile = elem
+            trnDstFile = dstFile.replace(repodir, datadir)
+            dstFile = redirect.get(dstFile, trnDstFile)
+            try:
+                if not os.path.isdir(srcFile):
+                    if srcFile.endswith('.zip'):
+                        fp = StringIO.StringIO()
+                        with open(srcFile, 'rb') as f:
+                            fp.write(f.read())
+                    else:
+                        fileContent = self.getPathContent((mode, srcFile))
+                        if not fileContent: continue
+                        if srcFile.endswith('.pck'):
+                            fobj = fileContent
+                            fp = fobj.zipFileStr()
+                        else:
+                            fp = StringIO.StringIO(fileContent)
+                else:
+                    excludedext= ('.pyo', '.pyc')
+                    fp = StringIO.StringIO()
+                    rootDir = os.path.dirname(srcFile)
+                    zfile = zipfile.ZipFile(fp, 'w')
+                    for dirname, subshere, fileshere in os.walk(srcFile):
+                        for fname in fileshere:
+                            if os.path.splitext(fname)[1] in excludedext: continue
+                            fname = os.path.join(dirname, fname)
+                            aname = os.path.relpath(fname, rootDir)
+                            zfile.write(fname, aname)
+                    zfile.close()
+                fp.seek(0)
+                try:
+                    basedir = os.path.dirname(dstFile)
+                    os.makedirs(basedir)
+                except:
+                    pass
+                with open(dstFile, 'wb') as f:
+                    shutil.copyfileobj(fp, f)
+            except:
+                errFile = dstFile.rpartition('\\')[2]
+                errMsg += errFile + '\n'
+        if errMsg: raise Exception(errMsg)
+
     def mapVrtDisk(self, name=None):
         if name is None:
             try:
@@ -298,22 +554,21 @@ class vrtDisk:
             fp = self.zipFileStr()
         except Exception as e:
             errMsg = 'During addon creation for ' + addonName + ' (' + addonId + ') , the following source files were not found: \n' + str(e)
-            tkMessageBox.showerror('Addon creation', errMsg)
-        else:
-            with contextlib.closing(fp):
-                try:
-                    if os.path.exists(name) and os.path.isdir(name):
-                        zfile = zipfile.ZipFile(fp, 'r')
-                        zfile.extractall(name)
-                    else:
-                        with open(name, 'wb') as f:
-                            shutil.copyfileobj(fp, f)
-                except Exception as e:
-                    tkMessageBox.showerror('Addon creation', str(e))
+            return tkMessageBox.showerror('Addon creation', errMsg)
+        with contextlib.closing(fp):
+            try:
+                if os.path.exists(name) and os.path.isdir(name):
+                    zfile = zipfile.ZipFile(fp, 'r')
+                    zfile.extractall(name)
                 else:
-                    errMsg = 'Addon for ' + addonName + ' (' + addonId + ') succesfully created'
-                    tkMessageBox.showinfo('Addon creation', errMsg)
-
+                    with open(name, 'wb') as f:
+                        shutil.copyfileobj(fp, f)
+            except Exception as e:
+                tkMessageBox.showerror('Addon creation', str(e))
+            else:
+                errMsg = 'Addon for ' + addonName + ' (' + addonId + ') succesfully created'
+                tkMessageBox.showinfo('Addon creation', errMsg)
+        self.repositoryFile()
 
     def listAddonFiles(self, name = None):
         fileList = self.getAddonTemplate()[1:]
@@ -332,10 +587,13 @@ class vrtDisk:
 
     def getPathContent(self, path):
         if isinstance(path, basestring):
-            itype, filename = self._getTypeSource(path)
+            itype, filesource = self._getTypeSource(path)
         else:
-            itype, filename = path
+            itype, filesource = path
+
+        filesource = filesource.split('::')
         if itype in ('file', 'depfile'):
+            filename = filesource[0]
             try:
                 filename = urllib.pathname2url(filename)
             except:
@@ -349,10 +607,33 @@ class vrtDisk:
             if m.group(3) and m.group(3).lower() != 'utf-8':
                 source = source.decode(m.group(3)).encode('utf-8')
             f.close()
+
+            rawcontent = source
+            rawtype = ''
+            while filesource:
+                filetype, filesource = filesource[0], filesource[1:]
+                if not rawtype:
+                    fp = StringIO.StringIO(rawcontent)
+                    if filetype.endswith('.zip'):
+                        rawcontent = zipfile.ZipFile(fp, 'r')
+                    elif filetype.endswith('.pck'):
+                        rawcontent = vrtDisk(file=fp)
+                    rawtype = os.path.splitext(filetype)[1]
+                else:
+                    if rawtype == '.zip':
+                        rawcontent = rawcontent.read(filetype)
+                    elif rawtype == '.pck':
+                        rawcontent = rawcontent.getPathContent(filetype)
+                    if rawtype in ['.zip', '.pck']:filesource.insert(0, filetype)
+                    rawtype = ''
+            source = rawcontent
+
         elif itype == 'genfile':
-            file_id = filename
-            fgen = self.getFileGenerator()
-            source = fgen._fileGenerators[file_id].getSource()
+            file_id, filesource = filesource[0], filesource[1:]
+            filesource = filesource or ('getSource',)
+            f = operator.methodcaller(*filesource)
+            obj = self.getGeneratorFor(file_id)
+            source = f(obj)
             if source is not None: source = source.encode('utf-8')
         return source
 
