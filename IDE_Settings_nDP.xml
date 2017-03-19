@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
-    <setting id="var_fileHistory" value="["C:/xbmcAddonIDE_program/AddonsData/NovelasHDgratisIDE.pck", "C:/xbmcAddonIDE_program/AddonsData/vodly.pck", "C:/xbmcAddonIDE_program/AddonsData/xkidecommons.pck"]" />
+    <setting id="var_fileHistory" value="["C:/Users/Alex Montes Barrios/Documents/xkAddonIDEdata/vodly.pck", "C:/Users/Alex Montes Barrios/Documents/xkAddonIDEdata/xkidecommons.pck", "C:/Users/Alex Montes Barrios/Documents/xkAddonIDEdata/NovelasHDgratisIDE.pck"]" />
     <setting id="appdir_importer" value="C:/Users/Alex Montes Barrios/git/KodiStubs/KodiImporter" />
-    <setting id="appdir_data" value="C:/xbmcAddonIDE_program/AddonsData" />
+    <setting id="appdir_data" value="C:/Users/Alex Montes Barrios/Documents/xkAddonIDEdata" />
 </settings>

@@ -72,28 +72,35 @@ def getForm(url, encodedHeaders, wait=0, **reqAttr):
         reqAttr[key] = '%s="%s"' % (key, str(reqAttr[key]))
 
     for key in ('id', 'action'):
-        reqAttr[key] = reqAttr.get(key, key) + '=_%s_' % key
+        suffixFmt = '=_%s_'
+        if key in reqAttr.keys():
+            suffixFmt = suffixFmt.replace('_', '')
+        reqAttr[key] = reqAttr.get(key, key) + suffixFmt % key
 
     pattern = r'(?#<form %s>)' % ' '.join(reqAttr.values())
     m = CustomRegEx.search(pattern, content)
-    form = m.group()
-    pattern = r'(?#<input type="hidden" name=name value=value>)'
-    encodedHeaders = dict(urlparse.parse_qsl(encodedHeaders))
-    encodedHeaders = urllib.urlencode({'referer':url,
-                                       'User-Agent':encodedHeaders['User-Agent']})
-    if m.group('action'):
-        url = urllib.basejoin(url, m.group('action'))
-    formVars = CustomRegEx.findall(pattern, form)
-    if m.group('id'):
-        id = m.group('id')
-        pattern = r"^.+?name: '([^']+)', value: '([^']+)'.+?#%s.+?$" % id
-        prepend = re.findall(pattern, content, re.MULTILINE)
-        formVars = prepend + formVars
-    qte = urllib.quote
-    postdata = '&'.join(map(lambda x: '='.join(x),[(var1, qte(var2) if var2 else '') for var1, var2 in formVars]))
-    urlStr = '%s<post>%s<headers>%s' % (url, postdata, encodedHeaders)
-    if wait: time.sleep(wait)
-    content = openUrl(urlStr)[1]
+    try:
+        form = m.group()
+    except:
+        pass
+    else:
+        pattern = r'(?#<input type="hidden" name=name value=value>)'
+        encodedHeaders = dict(urlparse.parse_qsl(encodedHeaders))
+        encodedHeaders = urllib.urlencode({'referer':url,
+                                           'User-Agent':encodedHeaders['User-Agent']})
+        if m.group('action'):
+            url = urllib.basejoin(url, m.group('action'))
+        formVars = CustomRegEx.findall(pattern, form)
+        if m.group('id'):
+            id = m.group('id')
+            pattern = r"^.+?name: '([^']+)', value: '([^']+)'.+?#%s.+?$" % id
+            prepend = re.findall(pattern, content, re.MULTILINE)
+            formVars = prepend + formVars
+        qte = urllib.quote
+        postdata = '&'.join(map(lambda x: '='.join(x),[(var1, qte(var2) if var2 else '') for var1, var2 in formVars]))
+        urlStr = '%s<post>%s<headers>%s' % (url, postdata, encodedHeaders)
+        if wait: time.sleep(wait)
+        content = openUrl(urlStr)[1]
     return content
 
 def getJwpSource(content, sourcesLabel='sources', orderBy=None):
@@ -105,7 +112,7 @@ def getJwpSource(content, sourcesLabel='sources', orderBy=None):
         sources = re.sub(pattern, lambda x: '"%s"'%x.group(), sources)
     sources = json.loads(sources)
     if orderBy:
-        sources = sorted(sources, key=lambda x: x[orderBy])
+        sources = sorted(sources, key=lambda x: x.get(orderBy, -1))
     key = set(['file', 'src']).intersection(sources[-1]).pop()
     return sources[-1][key]
 
