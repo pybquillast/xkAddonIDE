@@ -2,7 +2,7 @@
 from resolverTools import *
 import time
 
-def getMediaUrl(videoUrl):
+def hostAndMediaId(videoUrl):
     if isinstance(videoUrl, basestring):
         pattern = r'https*://(?:www.)*([a-z]+).+?[/=]([0-9A-Za-z_-]{10,})[./]*'
         try:
@@ -13,6 +13,13 @@ def getMediaUrl(videoUrl):
         host, media_id = videoUrl
     else:
         raise Exception('Invalid videoUrl, You must supply a videoUrl or a pair of (host, media_id)')
+    pattern = r'embed-(?P<key>.+?)-\d{3}x\d{3}'
+    m = re.match(pattern, media_id)
+    if m: media_id = m.group('key')
+    return (host, media_id)
+
+def getMediaUrl(videoUrl):
+    host, media_id = hostAndMediaId(videoUrl)
     try:
         resolver = globals()[host]
     except:
@@ -21,99 +28,79 @@ def getMediaUrl(videoUrl):
 
 """----------------- VIGENTES -----------------"""
 
-def flashx(videoId, headers = None):
+def jwplayerFamilyResolver(domain, videoId, headers = None, wait=0, hasForm=True, isPacked=True):
     headers = headers or {}
     headers['User-Agent'] = DESKTOP_BROWSER
     encodedHeaders = urllib.urlencode(headers)
-    url = 'http://flashx.tv/%s.html' % videoId
-    content = getForm(url, encodedHeaders, wait=5, method="POST")
-    pattern = r'(?#<script *="eval\((.+?)\)\s"=puzzle>)'
+    url = 'http://%s/%s' % (domain, videoId)
+    if hasForm:
+        content = getForm(url, encodedHeaders, wait=wait, method="POST")
+    else:
+        url += '<headers>%s' % encodedHeaders
+        content = openUrl(url)[1]
+    if isPacked:
+        pattern = r'(?#<script *="eval\((.+?)\)\s"=puzzle>)'
+    else:
+        pattern = r'(?#<script *="\s*jwplayer\(.+?"=puzzle>)'
     try:
-        puzzle = CustomRegEx.search(pattern, content).group('puzzle')
+        content = CustomRegEx.search(pattern, content).group('puzzle')
     except:
-        raise Exception('Resolver flashx.to: No puzzle detected')
-    content = unpack(puzzle)
-
-    source = getJwpSource(content, sourcesLabel='sources')
+        raise Exception('Resolver %s: No puzzle detected' % domain)
+    if isPacked: content = unpack(content)
+    source = getJwpSource(content, sourcesLabel='sources', orderBy='label')
     encodedHeaders = urllib.urlencode({'User-Agent':DESKTOP_BROWSER})
     urlStr = '%s|%s' % (source, encodedHeaders)
     return urlStr
+
+def vidoza(videoId, headers = None):
+    return jwplayerFamilyResolver('vidoza.net', videoId, headers, hasForm=False, isPacked=False)
+
+def flashx(videoId, headers=None):
+    return jwplayerFamilyResolver('flashx.tv', videoId + '.html', headers, wait=5)
 
 def vidtodo(videoId, headers = None):
-    headers = headers or {}
-    headers['User-Agent'] = DESKTOP_BROWSER
-    encodedHeaders = urllib.urlencode(headers)
-    url = 'http://vidtodo.com/%s' % videoId
-    content = getForm(url, encodedHeaders, method="POST")
-    pattern = r'(?#<script *="eval\((.+?)\)\s"=puzzle>)'
-    try:
-        puzzle = CustomRegEx.search(pattern, content).group('puzzle')
-    except:
-        raise Exception('Resolver vidtodo.com: No puzzle detected')
-    content = unpack(puzzle)
+    return jwplayerFamilyResolver('vidtodo.com', videoId, headers)
 
-    source = getJwpSource(content, sourcesLabel='sources')
-    encodedHeaders = urllib.urlencode({'User-Agent':DESKTOP_BROWSER})
-    urlStr = '%s|%s' % (source, encodedHeaders)
-    return urlStr
-
-def vidto(videoId, headers = None):
-    headers = headers or {}
-    headers['User-Agent'] = DESKTOP_BROWSER
-    encodedHeaders = urllib.urlencode(headers)
-    url = 'http://vidto.me/%s' % videoId
-    content = getForm(url, encodedHeaders, wait=6, method="POST")
-
-    pattern = r"(?#<script *='eval.+?'=pack>)"
-    puzzle = CustomRegEx.search(pattern, content).group('pack')
-    puzzle = unpack(puzzle[len('eval('):-1])
-
-    href = getJwpSource(puzzle, sourcesLabel='hd', orderBy='label')
-    encodedHeaders = urllib.urlencode({'User-Agent':DESKTOP_BROWSER})
-    urlStr = '%s|%s' % (href,encodedHeaders)
-    return urlStr
+def vidto(videoId, headers=None):
+    return jwplayerFamilyResolver('vidto.me', videoId + '.html', headers, wait=6, isPacked=False)
 
 def streamin(videoId, headers=None):
+    return jwplayerFamilyResolver('www.streamin.to', videoId, headers, wait=5)
+
+def gorillavid(videoId, headers=None):
+    return jwplayerFamilyResolver('www.gorillavid.in', videoId, headers, wait=1, isPacked=False)
+
+def daclips(videoId, headers=None):
+    return jwplayerFamilyResolver('daclips.in', videoId, headers, wait=1, hasForm=False, isPacked=False)
+
+def speedvid(videoId, headers = None):
+    return jwplayerFamilyResolver('www.speedvid.net', videoId, headers, hasForm=False)
+
+def vidzi(videoId, headers = None):
     headers = headers or {}
     headers['User-Agent'] = DESKTOP_BROWSER
-    encodedHeaders = urllib.urlencode(headers)
-    url = 'http://www.streamin.to/%s' % videoId
-    content = getForm(url, encodedHeaders, wait=5, method="POST")
+    headers['Upgrade-Insecure-Requests'] = 1
+    return jwplayerFamilyResolver('vidzi.tv', videoId, headers, hasForm=False, isPacked=True)
 
-    pattern = r'(?#<script *="eval\((.+?)\)\s"=puzzle>)'
-    try:
-        puzzle = CustomRegEx.search(pattern, content).group('puzzle')
-    except:
-        raise Exception('Resolver streamin.to: No puzzle detected')
-    puzzle = unpack(puzzle)
-    pattern = r'file:"(?P<videourl>http://[0-9.]+[^"]+)"'
-    try:
-        videourl = CustomRegEx.search(pattern, puzzle).group('videourl')
-    except:
-        raise Exception('Resolver streamin.to: No videourl detected')
-    headers = {'User-Agent':MOBILE_BROWSER}
-    urlStr = '%s|%s' % (videourl,urllib.urlencode(headers))
-    return urlStr
+def vodlock(videoId, headers=None):
+    return jwplayerFamilyResolver('vodlock.co', videoId, headers, wait=3)
 
-def estream(vudeoId, headers=None):
+def vidlox(videoId, headers=None):
+    return jwplayerFamilyResolver('vidlox.tv', videoId, headers, hasForm=False, isPacked=False)
+
+def estream(videoId, headers=None):
     headers = headers or {}
     headers['User-Agent'] = DESKTOP_BROWSER
     encodedHeaders = urllib.urlencode(headers)
     url = 'http://www.estream.to/%s.html' % videoId
     urlStr = '%s<headers>%s' % (url, encodedHeaders)
     content = openUrl(urlStr)[1]
-    pattern = r'(?#<script *="eval\((.+?)\)\s"=puzzle>)'
+    pattern = r'(?#<source res=label src=url>)'
     try:
-        puzzle = CustomRegEx.search(pattern, content).group('puzzle')
+        sources = CustomRegEx.findall(pattern, content)
     except:
-        raise Exception('Resolver estream.to: No puzzle detected')
-    content = unpack(puzzle)
-    pattern = r'file:"(?P<videourl>https*://[^"]+mp4)"'
-    try:
-        source = CustomRegEx.search(pattern, content).group('videourl')
-    except:
-        raise Exception('Resolver estream.to: No source detected')
-
+        raise Exception('Resolver estream.to: No sources detected')
+    source = sorted(sources)[-1][1]
     encodedHeaders = urllib.urlencode({'User-Agent':DESKTOP_BROWSER})
     urlStr = '%s|%s' % (source, encodedHeaders)
     return urlStr
@@ -132,115 +119,105 @@ def gamovideo(videoId, headers=None):
 gamo = gamovideo
 
 def openload(videoId, headers = None):
-    ''' Febrero 7 de 2017'''
+    ''' Marzo 14 de 2017'''
     headers = headers or {}
     headers['User-Agent'] = DESKTOP_BROWSER
     encodeHeaders = urllib.urlencode(headers)
     urlStr = 'http://openload.co/f/%s/<headers>%s' % (videoId, encodeHeaders)
     content = openUrl(urlStr)[1]
-    pattern = r'(?#<span id="[^"]+" *="[0-9]{200,}"=key>)'
+    pattern = r'(?#<span id="[^"]+" *="[0-9a-z]{120,}"=key>)'
     try:
         key = CustomRegEx.search(pattern, content).group('key')
     except:
         return None
-    x, key = int(key[:2]), key[2:]
-    n = len(key)/5
-    a = [key[5*k:5*k+5] for k in range(n)]
-    a = map(lambda x: (int(x[:3]), int(x[3:])), a)
-    a = sorted(a, key=lambda x: x[1])
-    url = ''.join([chr(d[0] - x ) for d in a])
-    videoUrl = 'https://openload.' \
+    param1 = CustomRegEx.search(r'0x([0-9a-f]+)\),0x2\)', content).group(1)
+    param1 = int(param1, 16)
+    y=ord(key[0])
+    e=y-52
+    d=max(2,e)
+    e=min(d, (len(key)-param1)-2)
+    t=key[e:e+param1]
+    v=key[:e] + key[e+param1:]
+    g=map(lambda n:int(t[n:n+3],8), range(0,len(t),3))
+    leng = len(g)
+    cla = 0
+    ba = 0
+    url = ''
+    while ba < len(v):
+        wa  = v[ba:ba+2]
+        ico = v[ba:ba+3]
+        nc3 = v[ba:ba+4]
+        da = int(wa, 16)
+        ba += 2
+        if cla % 3 == 0:
+            da = int(ico, 8)
+            ba += 1
+        elif cla % 2 == 0 and cla != 0 and ord(v[cla-1]) < 60:
+            da = int(nc3, 10)
+            ba += 2
+        gk = g[cla%9]
+        da = da^213^gk
+        url += chr(da)
+        cla += 1
+
+    if not url.startswith(videoId): raise Exception('Resolver broken')
+    videoUrl =  'https://openload.' \
                'co/stream/{0}?mime=true'.format(url)
     urlStr = 'http://openload.co/f/%s/' % videoId
-    urlStr = '%s|%s' % (videoUrl,urllib.urlencode({'Referer': urlStr, 'User-Agent':MOBILE_BROWSER}))
+    urlStr = '%s|%s' % (videoUrl,urllib.urlencode({'Referer': urlStr, 'User-Agent':DESKTOP_BROWSER}))
     return urlStr
 
-def thevideo(videoId, headers=None):
-    headers = headers or {}
 
-    headers.update({'User-Agent':DESKTOP_BROWSER,
-               'Referer': 'http://thevideo.me/%s' % videoId})
-    encodeHeaders = urllib.urlencode(headers)
-    urlStr = 'http://thevideo.me/%s<headers>%s' % (videoId, encodeHeaders)
-    content = openUrl(urlStr)[1]
-    pattern = r'''name: '(?P<var1>[^']+)', value: '(?P<var2>[^']+)' \}\).prependTo\(\"#veriform\"\)'''
-    formVars = CustomRegEx.findall(pattern, content)
-    pattern = r"(?#<form .input<name=var1 value=var2>*>)"
-    formVars.extend(CustomRegEx.findall(pattern, content))
-    pattern = r"\$\.cookie\(\'(?P<var1>[^']+)\', \'(?P<var2>[^']+)\'"
-    cookieval = CustomRegEx.findall(pattern, content)
-    qte = urllib.quote
-    postdata = '&'.join(map(lambda x: '='.join(x),[(var1, qte(var2) if var2 else '') for var1, var2 in formVars]))
-    headers['Cookie'] = '; '.join(map(lambda x: '='.join(x),cookieval))
-    encodeHeaders = urllib.urlencode(headers)
-    urlStr = 'http://thevideo.me/%s<post>%s<headers>%s' % (videoId, postdata, encodeHeaders)
-    content = openUrl(urlStr)[1]
-    pattern = r"label: '(?P<res>[^']+)', file: '(?P<url>[^']+)'"
-    sources = CustomRegEx.findall(pattern, content)
-    res, href = sources.pop()
-    return href
-    pass
-
-def vidzi(videoId, headers = None):
-    headers = headers or {}
-    headers['User-Agent'] = DESKTOP_BROWSER
-    headers['Upgrade-Insecure-Requests'] = 1
-    encodedHeaders = urllib.urlencode(headers)
-    url = 'http://vidzi.tv/%s.html' % videoId
-    urlStr = '%s<haders>%s' % (url, encodedHeaders)
-
-    content = openUrl(urlStr)[1]
-    pattern = r'(?#<script *="eval\((.+?)\)\s"=puzzle>)'
-    try:
-        puzzle = CustomRegEx.search(pattern, content).group('puzzle')
-    except:
-        raise Exception('Resolver vidzi.tv: No puzzle detected')
-    puzzle = unpack(puzzle)
-
-    href = getJwpSource(puzzle, sourcesLabel='sources')
-    encodedHeaders = urllib.urlencode({'User-Agent':DESKTOP_BROWSER})
-    urlStr = '%s|%s' % (href,encodedHeaders)
-    return urlStr
-
-def nowvideoFamilyResolver(domain, videoId, headers, upgradeInsecureRequest=0):
+def nowvideoFamilyResolver(domain, videoId, headers, hasForm=True, upgradeInsecureRequest=0):
     headers = headers or {}
     headers['User-Agent'] = DESKTOP_BROWSER
     if upgradeInsecureRequest: headers['Upgrade-Insecure-Requests'] = 1
     encodedHeaders = urllib.urlencode(headers)
-    url = 'https://www.%s/video/%s' % (domain, videoId)
-    content = getForm(url, encodedHeaders, method="post")
+    url = 'https://%s/%s' % (domain, videoId)
+    if hasForm:
+        content = getForm(url, encodedHeaders, method="post")
+    else:
+        url += '<headers>%s' % encodedHeaders
+        content = openUrl(url)[1]
     pattern = r'(?#<source src=source>)'
     try:
         sources = CustomRegEx.findall(pattern, content)
     except:
-        raise Exception('Resolver Nowvideo.sx: No puzzle detected')
+        raise Exception('Resolver %s: No source detected' % domain)
 
     href = sources[-1]
     encodedHeaders = urllib.urlencode({'User-Agent':DESKTOP_BROWSER})
     urlStr = '%s|%s' % (href,encodedHeaders)
     return urlStr
 
+def rapidvideo(videoId, headers = None):
+    videoId = 'v/%s&q=720p' % videoId
+    return nowvideoFamilyResolver('www.rapidvideo.com', videoId, headers, hasForm=False)
+
 def nowvideo(videoId, headers=None):
-    return nowvideoFamilyResolver('nowvideo.sx', videoId, headers)
+    videoId = 'video/%s' % videoId
+    return nowvideoFamilyResolver('www.nowvideo.sx', videoId, headers)
 
 def cloudtime(videoId, headers=None):
-    return nowvideoFamilyResolver('cloudtime.to', videoId, headers)
+    videoId = 'video/%s' % videoId
+    return nowvideoFamilyResolver('www.cloudtime.to', videoId, headers)
 
 def movshare(videoId, headers=None):
-    return nowvideoFamilyResolver('movshare.net', videoId, headers, upgradeInsecureRequest=1)
+    videoId = 'video/%s' % videoId
+    return nowvideoFamilyResolver('www.movshare.net', videoId, headers, upgradeInsecureRequest=1)
 
 
-def thevideoFamilyResolver(domain, videoId, headers = None):
+def thevideoFamilyResolver(domain, videoId, mpri_key_tag, urlkey, headers = None):
     headers = headers or {}
-    headers['User-Agent'] = MOBILE_BROWSER
+    headers['User-Agent'] = DESKTOP_BROWSER
     encodedHeaders = urllib.urlencode(headers)
-    url = 'http://%s/%s' % (domain, videoId)
-    content = getForm(url, encodedHeaders, method="POST", id="veriform")
-    pattern = r"mpri_Key='([^']+)'"
-    m = re.search(pattern, content)
+    url = 'https://%s/%s' % (domain, videoId)
+    content = openUrl(url)[1]
+    pattern = r"var [a-zA-Z_]+='([^']+)'"
+    m = re.findall(pattern, content)
     if not m:
         raise Exception('No "mpri_Key" found')
-    mpri_Key = m.group(1)
+    mpri_Key = m[-1]
 
     pattern = r'sources: (\[[^\]]+\])'
     m = re.search(pattern, content)
@@ -250,7 +227,7 @@ def thevideoFamilyResolver(domain, videoId, headers = None):
     sources = sorted([(item['label'], item['file']) for item in sources])
     source = sources[-1][1]
 
-    urlKey = 'http://%s/jwv/%s' % (domain, mpri_Key)
+    urlKey = urlkey + mpri_Key
     urlKey += '<headers>%s' % encodedHeaders
     content = openUrl(urlKey)[1]
     content = unpack(content)
@@ -266,27 +243,38 @@ def thevideoFamilyResolver(domain, videoId, headers = None):
     return urlStr
 
 def thevideo(videoId, headers = None):
-    return thevideoFamilyResolver('thevideo.me', videoId, headers)
+    videoId = "embed-%s-600x360.html" % videoId
+    return thevideoFamilyResolver('thevideo.me', videoId,
+                                  'lets_play_a_game',
+                                  'https://thevideo.me/vsign/player/', headers)
 
 def vidup(videoId, headers = None):
-    return thevideoFamilyResolver('vidup.me', videoId, headers)
+    videoId = "embed-%s-600x360.html" % videoId
+    return thevideoFamilyResolver('vidup.me', videoId,
+                                  'mpri_Key',
+                                  'http://vidup.me/jwv/',
+                                  headers)
 
-
-def playFamilyResolver(domain, videoId, wait, headers=None):
+def playFamilyResolver(domain, videoId, wait, headers=None, **reqattr):
     headers = headers or {}
     headers['User-Agent'] = DESKTOP_BROWSER
     encodedHeaders = urllib.urlencode(headers)
     url = 'http://%s/%s' % (domain, videoId)
-    content = getForm(url, encodedHeaders, wait=wait, method='POST')
+    reqattr = reqattr or dict(method='POST')
+    try:
+        content = getForm(url, encodedHeaders, wait=wait, **reqattr)
+    except:
+        url += '<headers>%s' % encodedHeaders
+        content = openUrl(url)[1]
     pattern = r'(?#<script *="eval\((.+?)\)\s"=puzzle>)'
     try:
         puzzle = CustomRegEx.search(pattern, content).group('puzzle')
     except:
         raise Exception('Resolver %s: No puzzle detected' % domain)
     puzzle = unpack(puzzle)
-    videourl = getJwpSource(puzzle, sourcesLabel='sources')
+    videourl = getJwpSource(puzzle, sourcesLabel='sources', orderBy='label')
     videourl = re.sub(r'[0-9a-z]{40,}', lambda x: (x.group()[:-4]+x.group()[-3:])[::-1], videourl)
-    headers = {'User-Agent':DESKTOP_BROWSER}
+    headers = {'User-Agent':DESKTOP_BROWSER, 'Referer':url}
     urlStr = '%s|%s' % (videourl,urllib.urlencode(headers))
     return urlStr
 
@@ -296,6 +284,16 @@ play = streamplay
 
 def powvideo(videoId, headers=None):
     return playFamilyResolver('powvideo.net', videoId, 10, headers)
+
+def thevideobee(videoId, headers=None):
+    return playFamilyResolver('thevideobee.to', videoId, 5, headers)
+
+def watchers(videoId, headers=None):
+    videoId += '.html'
+    return playFamilyResolver('watchers.to', videoId, 0, headers, id='noform')
+
+
+
 
 
 """----------------- EN DESARROLLO-------------"""
@@ -442,7 +440,7 @@ def filehoot(videoId, headers=None):
 def netu(videoId, encHeaders = ''):
     headers = {'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                'Content-Type': 'text/html; charset=utf-8'}
-    player_url = "http://hqq.tv/player/embed_player.php?vid=%s&autoplay=no" % videoId
+    player_url = "http://netu.tv/watch_video.php?v=%s" % videoId
     data = openUrl(player_url, False)[1]
     b64enc = re.search('base64([^\"]+)', data, re.DOTALL)
     b64dec = b64enc and base64.decodestring(b64enc.group(1))
@@ -662,6 +660,56 @@ return: "\"
     code = code.decode('unicode-escape')
     code = code.replace('"""','"')
     pass
+
+def openload_02(videoId, headers = None):
+    ''' Febrero 7 de 2017'''
+    headers = headers or {}
+    headers['User-Agent'] = DESKTOP_BROWSER
+    encodeHeaders = urllib.urlencode(headers)
+    urlStr = 'http://openload.co/f/%s/<headers>%s' % (videoId, encodeHeaders)
+    content = openUrl(urlStr)[1]
+    pattern = r'(?#<span id="[^"]+" *="[0-9A-Za-z]{200,}"=key>)'
+    try:
+        key = CustomRegEx.search(pattern, content).group('key')
+    except:
+        return None
+    w, key = int(key[0]), key[1:]
+    n = len(key)/5
+    a = [key[5*k:5*k+5] for k in range(n)]
+    a = map(lambda x: (ord(x[0]), (int(x[1]), int(x[2:]))), a)
+    orden = [(x[0]-65)*(x[0]<=90)+(x[0]+25-97)*(x[0]>=97) for x in a]
+    letra = [chr((x[1][1]/x[1][0])-w) for x in a]
+    url = ''.join([item[1] for item in sorted(zip(orden, letra))])
+    videoUrl =  'https://openload.' \
+               'co/stream/{0}?mime=true'.format(url)
+    urlStr = 'http://openload.co/f/%s/' % videoId
+    urlStr = '%s|%s' % (videoUrl,urllib.urlencode({'Referer': urlStr, 'User-Agent':MOBILE_BROWSER}))
+    return urlStr
+
+
+def openload_01(videoId, headers = None):
+    ''' Febrero 7 de 2017'''
+    headers = headers or {}
+    headers['User-Agent'] = DESKTOP_BROWSER
+    encodeHeaders = urllib.urlencode(headers)
+    urlStr = 'http://openload.co/f/%s/<headers>%s' % (videoId, encodeHeaders)
+    content = openUrl(urlStr)[1]
+    pattern = r'(?#<span id="[^"]+" *="[0-9]{200,}"=key>)'
+    try:
+        key = CustomRegEx.search(pattern, content).group('key')
+    except:
+        return None
+    x, key = int(key[:2]), key[2:]
+    n = len(key)/5
+    a = [key[5*k:5*k+5] for k in range(n)]
+    a = map(lambda x: (int(x[:3]), int(x[3:])), a)
+    a = sorted(a, key=lambda x: x[1])
+    url = ''.join([chr(d[0] - x ) for d in a])
+    videoUrl = 'https://openload.' \
+               'co/stream/{0}?mime=true'.format(url)
+    urlStr = 'http://openload.co/f/%s/' % videoId
+    urlStr = '%s|%s' % (videoUrl,urllib.urlencode({'Referer': urlStr, 'User-Agent':MOBILE_BROWSER}))
+    return urlStr
 
 def openload_00(videoId, headers = None):
     headers = headers or {}
@@ -895,6 +943,10 @@ if __name__ == "__main__":
     videourl = r'https://www.flashx.tv/kt9zst96ceyj.html'
     videourl = r"http://watchers.to/qg97qknhyc72.html"
     videourl = r"http://nosvideo.com/qlwibotc8q4d"
+    videourl = r'https://openload.co/f/gmJ4A1DWVRA/Seth.Meyers.2017.03.13.Glenn.Close.XviD-AFG.mp4'
+    videourl = r'http://vidup.me/embed-ycbm4tu1qcsv-600x360.html'
+    videourl = r'https://thevideo.me/embed-eyz4l8qcsnoe-600x360.html'
+    videourl = r'http://vidtodo.com/czgif9fo4j3m'
     resp = getMediaUrl(videourl)
 
     resolvers = [

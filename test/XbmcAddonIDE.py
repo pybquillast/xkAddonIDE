@@ -112,7 +112,7 @@ class XbmcAddonIDE(tk.Toplevel):
                 self.menuBar[name] = tk.Menu(menubutton, tearoff=False)
 
         commOptions.update([('color', 'PaleGreen1')])
-        self.menuIcon = menuIcon = iconImage('fa-navicon', **commOptions)
+        self.menuIcon = menuIcon = iconImage('fa-bars', **commOptions)
 
         self.viewPaneOp = viewPane = tk.Frame(menuFrame)
         viewPane.pack(side = tk.TOP, fill = tk.X)
@@ -139,8 +139,8 @@ class XbmcAddonIDE(tk.Toplevel):
         sideButtFrame = tk.Frame(frame, bg='light sea green')
         sideButtFrame.pack(side=tk.LEFT, fill=tk.Y)
 
-        self.newIcon = newIcon = iconImage('fa-file-o', **commOptions)
-        self.openIcon = openIcon = iconImage('fa-folder-open-o', **commOptions)
+        self.newIcon = newIcon = iconImage('fa-file', **commOptions)
+        self.openIcon = openIcon = iconImage('fa-folder-open', **commOptions)
         self.saveIcon = saveIcon = iconImage('fa-save', **commOptions)
 
         tk.Button(sideButtFrame, image=newIcon, command=self.newFile).pack(side=tk.TOP)

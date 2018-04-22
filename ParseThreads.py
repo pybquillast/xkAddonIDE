@@ -314,7 +314,7 @@ class RegexpBar(tk.Frame):
 
         self.actMatch(nPos)
 
-    def getBorderTags(self, indexPos):
+    def getBorderTags(self, indexPos, withActMatch=True):
         textw = self.textWidget
         def getNextItem(indexPos):
             index = indexPos = textw.index(indexPos)
@@ -341,7 +341,7 @@ class RegexpBar(tk.Frame):
         nxtMark = getNextItem(indexPos)
         prevMark = getPreviousItem(indexPos)
 
-        if 'actMatch' in textw.tag_names(indexPos) and 'actMatch' in textw.tag_names(prevMark):
+        if withActMatch and 'actMatch' in textw.tag_names(indexPos) and 'actMatch' in textw.tag_names(prevMark):
             prevMark = getPreviousItem(prevMark)
 
         return (prevMark, nxtMark)
@@ -603,9 +603,9 @@ class NavigationBar(tk.Frame):
         iconImage = imgp.getFontAwesomeIcon
         commOptions = dict(size=24,isPhotoImage=True, color='black', aspectratio='stretch')
 
-        self.leftIcon = leftIcon = iconImage('fa-arrow-left', **commOptions)
-        self.rightIcon = rightIcon = iconImage('fa-arrow-right', **commOptions)
-        self.gearIcon = gearIcon = iconImage('fa-gear', **commOptions)
+        self.leftIcon = leftIcon = iconImage('fa-long-arrow-alt-left', **commOptions)
+        self.rightIcon = rightIcon = iconImage('fa-long-arrow-alt-right', **commOptions)
+        self.gearIcon = gearIcon = iconImage('fa-cog', **commOptions)
 
         self.prevUrl = tk.Button(urlFrame, image=leftIcon, state = tk.DISABLED, font = self.customFont, text = "<", command = self.prevButton)
         self.prevUrl.pack(side = tk.LEFT)
@@ -1166,7 +1166,7 @@ class PythonEditor(tk.Frame):
 
     def _click(self, event):
         if 'hyper' in self.textw.tag_names(tk.CURRENT):
-            tagRange = self.textw.tag_prevrange('hyper', tk.CURRENT)
+            tagRange = self.textw.tag_prevrange('hyper', tk.CURRENT) or (tk.CURRENT,)
             texto = self.textw.get(*tagRange)
             self.processHyperlink(texto)
             return
@@ -1431,7 +1431,7 @@ class RegexpFrame(tk.Frame):
             elif discrim.startswith('urlin'):
                 toTest = self.urlFrame.getActiveUrl()
             elif discrim.startswith('option'):
-                iid = self.regexBar.getBorderTags('current')[0][1:]
+                iid = self.regexBar.getBorderTags('current', withActMatch=False)[0][1:]
                 toTest = str(int(iid, 16) - 1)
             else:
                 return defValue

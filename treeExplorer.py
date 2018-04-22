@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 '''
 Created on 20/02/2015
 
@@ -13,6 +14,7 @@ import FileGenerator
 import re
 import urllib
 import zipfile
+import operator
 import StringIO
 import xml.etree.ElementTree as ET
 import SintaxEditor
@@ -229,6 +231,15 @@ class treeExplorer(FilteredTree):
             depIid = os.path.dirname(elem[0])
             if elem[1]['source'].startswith('xbmc'): continue
             self.onNewDependency(iid = depIid, newDependency = elem[1]['source'])
+
+        # Se chequea que existan los directorios requeridos según el extendionpoint que desarrolla el addon
+        reqDirectories = self.vrtDisc.getRequiredDirectories()
+        for nodeId, values in reqDirectories:
+            if not self.treeview.exists(nodeId):
+                self.registerNode(nodeId, childName = True)
+            for dKey, dValue in values.items():
+                self.treeview.set(nodeId, column = dKey, value = dValue)
+
         if activeNode:
             self.onTreeSelection(node = activeNode)
         self.vrtDisc._reportChange = True
@@ -236,24 +247,7 @@ class treeExplorer(FilteredTree):
 
     def processRawContent(self, nodeId, rawcontent):
         filesource = self.treeview.set(nodeId, 'source').split('::')
-        rawtype = ''
-        while filesource:
-            filetype, filesource = filesource[0], filesource[1:]
-            if not rawtype:
-                if filetype.endswith('.zip'):
-                    fp = StringIO.StringIO(rawcontent)
-                    rawcontent = zipfile.ZipFile(fp, 'r')
-                elif filetype.endswith('.pck'):
-                    rawcontent = FileGenerator.vrtDisk(file=StringIO.StringIO(rawcontent))
-                rawtype = os.path.splitext(filetype)[1]
-            else:
-                if rawtype == '.zip':
-                    rawcontent = rawcontent.read(filetype)
-                elif rawtype == '.pck':
-                    rawcontent = rawcontent.getPathContent(filetype)
-                if rawtype in ['izip', '.pck']:filesource.insert(0, filetype)
-                rawtype = ''
-        filetype = os.path.splitext(filetype)[1]
+        filetype = os.path.splitext(filesource[-1])[1]
         if filetype in IMAGEFILES:
             try:
                 from PIL import ImageTk  # @UnresolvedImport
@@ -263,8 +257,12 @@ class treeExplorer(FilteredTree):
                 self.image = ImageTk.PhotoImage(data=rawcontent)
                 content = self.image
         elif filetype == '.zip':
+            # fp = StringIO.StringIO(rawcontent)
+            # rawcontent = zipfile.ZipFile(fp, 'r')
             content = '\n'.join(rawcontent.namelist())
         elif filetype == '.pck':
+            # fp = StringIO.StringIO(rawcontent)
+            # rawcontent = FileGenerator.vrtDisk(file=fp)
             addonfiles = [x[0] for x in rawcontent.listAddonFiles()]
             content = '\n'.join(sorted(addonfiles))
         else:
@@ -303,17 +301,18 @@ class treeExplorer(FilteredTree):
                     content = self.editedContent.pop(nodeId)
                 else:
                     try:
-                        rawcontent = self.vrtDisc.getPathContent((itype, source.split('::',1)[0]))
+                        rawcontent = self.vrtDisc.getPathContent((itype, source))
                     except Exception as e:
                         nodeExt = '.txt'
                         contentFmt = 'While retrieving the information for %s (Source file for %s), the following error has ocurred:\n%s'
-                        rawcontent = contentFmt % (source, nodeName, str(e))
-                    content, rawcontent = self.processRawContent(nodeId, rawcontent)
-                if nodeExt in IMAGEFILES:
-                    inspos, editedFlag = 'end', False
+                        content = rawcontent = contentFmt % (source, nodeName, str(e))
+                    else:
+                        content, rawcontent = self.processRawContent(nodeId, rawcontent)
+                    if nodeExt in IMAGEFILES:
+                        inspos, editedFlag = 'end', False
+                    self.getContentOutline(rawcontent, nodeId)
                 fsintax = SintaxEditor.sintaxMap.get(nodeExt, None)
-                self.getContentOutline(rawcontent, nodeId)
-            elif itype in ['root', 'dir', 'requires', 'depdir']:
+            elif itype.endswith('dir') or itype in ['root', 'requires']:
                 parent = self.editorWidget.textw
                 lwidth, lheight = parent.winfo_width(), parent.winfo_height()
                 flist = tk.Frame(parent, width=lwidth, height=lheight)
@@ -352,23 +351,27 @@ class treeExplorer(FilteredTree):
         selNode = self.treeview.focus()
         if not selNode: selNode = ''
         itype = self.treeview.set(selNode, 'type')
-        if itype == 'depfile': return False
+        if itype in ['depfile', 'repfile', 'repdir']: return False
         self.menuBar['popup'] = tk.Menu(self, tearoff=False)
         menuOpt = []
-        menuOpt.append(('command', 'Rename','Ctrl+R', 0, self.onRename))
-        if itype != 'root': menuOpt.append(('command', 'Delete','Ctrl+D', 0, self.onDelete))
-        menuOpt.append(('separator',))            
-        menuOpt.append(('command', 'Properties','Ctrl+P', 0, self.dummyCommand))
-        if itype == 'depdir': 
-            menuOpt = menuOpt[2:]
-            menuOpt.insert(0,('command', 'Delete','Ctrl+D', 0, self.onDelDependency))
-        if itype == 'requires':
-            menuOpt.pop(1)
-            menuOpt.insert(0,('command', 'New dependency','Ctrl+D', 0, self.onNewDependency))
-            menuOpt.insert(1,('separator',))
-        if itype not in ['genfile', 'file', 'requires', 'depdir']:
-            menuOpt.insert(0,('cascade', 'Insert New', 0))
-            menuOpt.insert(1,('separator',))
+        if itype == 'repdatadir':
+            menuOpt.append(('command', 'AddonArchFile','Ctrl+A', 0, lambda x='addonfile':self.onInsertAddon(x)))
+            menuOpt.append(('command', 'AddonDir','Ctrl+A', 0, lambda x='addondir':self.onInsertAddon(x)))
+        else:
+            menuOpt.append(('command', 'Rename','Ctrl+R', 0, self.onRename))
+            if itype != 'root': menuOpt.append(('command', 'Delete','Ctrl+D', 0, self.onDelete))
+            menuOpt.append(('separator',))
+            menuOpt.append(('command', 'Properties','Ctrl+P', 0, self.dummyCommand))
+            if itype == 'depdir':
+                menuOpt = menuOpt[2:]
+                menuOpt.insert(0,('command', 'Delete','Ctrl+D', 0, self.onDelDependency))
+            if itype == 'requires':
+                menuOpt.pop(1)
+                menuOpt.insert(0,('command', 'New dependency','Ctrl+D', 0, self.onNewDependency))
+                menuOpt.insert(1,('separator',))
+            if itype not in ['genfile', 'file', 'requires', 'depdir']:
+                menuOpt.insert(0,('cascade', 'Insert New', 0))
+                menuOpt.insert(1,('separator',))
         self.makeMenu('popup', menuOpt)    
          
         if self.menuBar.get('popup' + SEP + 'Insert_New', None):    
@@ -426,23 +429,26 @@ class treeExplorer(FilteredTree):
         self.onTreeSelection(iid)
 
     def onNewDependency(self, iid = None, newDependency = None):
-        from xbmc import translatePath
         iid = iid or self.treeview.focus()
-        addonsPath = translatePath('special://home/addons')
- 
-        if newDependency and os.path.exists(os.path.join(addonsPath, newDependency)):
-            newDependency = os.path.join(addonsPath, newDependency)            
-        elif newDependency:
+
+        if not newDependency or not os.path.dirname(newDependency):
+            from xbmc import translatePath
+            addonsPath = translatePath('special://home/addons')
+            if not newDependency:
+                newDependency = tkFileDialog.askdirectory(title = 'New dependency', initialdir = addonsPath, mustexist=True)
+            else:
+                newDependency = os.path.join(addonsPath, newDependency)
+
+        if not os.path.exists(newDependency):
             newDependency = tkFileDialog.askdirectory(title = newDependency + 'not found, please set new dependency', initialdir = addonsPath, mustexist=True)
-        else:
-            newDependency = tkFileDialog.askdirectory(title = 'New dependency', initialdir = addonsPath, mustexist=True)
-        if newDependency:
-            xmlfile = ET.parse(os.path.join(newDependency,'addon.xml')).getroot()
-            addonVer = xmlfile.get('version')
-            source = os.path.basename(newDependency)
-            self.vrtDisc.modDependencies('insert', source, addonVer)
-            self.insertDirectory(iid, newDependency, values = ('depdir', 0, source, addonVer), excludeext = ('.pyc', '.pyo'))
-            self.vrtDisc.hasChange = True
+
+        if not newDependency: return
+        xmlfile = ET.parse(os.path.join(newDependency,'addon.xml')).getroot()
+        addonVer = xmlfile.get('version')
+        source = os.path.basename(newDependency)
+        self.vrtDisc.modDependencies('insert', source, addonVer)
+        self.insertDirectory(iid, newDependency, values = ('depdir', 0, source, addonVer), excludeext = ('.pyc', '.pyo'))
+        self.vrtDisc.hasChange = True
 
     def insertDirectory(self, dirParent = None, dirName = None, values = None, excludeext = None):
         if not dirName:
@@ -456,16 +462,15 @@ class treeExplorer(FilteredTree):
         itype, edit, source, inspos = values
         itype = 'depfile' if itype == 'depdir' else 'file'
         inspos = '1.0'
-        lenDestino = len(dirName)
-        for dirname, subshere, fileshere in os.walk(dirName):
+        source = dirName
+        for dirname, subshere, fileshere in os.walk(source):
             for fname in fileshere:
                 if os.path.splitext(fname)[1] in excludeext:continue
-                fname = os.path.join(dirname, fname)
-                fnameNew = fname[lenDestino:]
-                nodeName, extName = os.path.splitext(fnameNew)
-                nodeId = idBaseDir + fnameNew.replace(os.sep, SEP)
+                fsource = os.path.join(dirname, fname)
+                relpath = os.path.relpath(fsource, source).strip('.').replace(os.sep, SEP)
+                nodeId = idBaseDir + SEP + relpath
                 self.registerNode(nodeId, childName = True)
-                self.treeview.item(nodeId, values = (itype, edit, fname, inspos))
+                self.treeview.item(nodeId, values = (itype, edit, fsource, inspos))
 
     def insertFolder(self, folderParent = None, folderName = None):
         parentId = folderParent or self.treeview.focus()
@@ -481,8 +486,9 @@ class treeExplorer(FilteredTree):
         return childId
  
     def getContentOutline(self, rawcontent, moduleID):
-        filetype = os.path.splitext(moduleID)[1]
-        if filetype == '.py':
+        sourcetype = self.treeview.set(moduleID, 'source').rsplit('::', 1)[-1]
+        sourcetype = os.path.splitext(sourcetype)[1]
+        if sourcetype == '.py':
             xbmcThread = self.vrtDisc._menuthreads
             fileTree = self.getTextTree(rawcontent, prefix = moduleID)
             for child in sorted(fileTree):
@@ -492,11 +498,11 @@ class treeExplorer(FilteredTree):
                 self.treeview.set(child[0],column = 'inspos', value = '1.0 + %d chars' % child[2])
                 if xbmcThread.existsThread(child[1]) and xbmcThread.isthreadLocked(child[1]):
                     self.treeview.item(child[0], tags=('locked',))
-        elif filetype in ['.zip', '.pck']:
-            if filetype == '.zip':
+        elif sourcetype in ['.zip', '.pck']:
+            if sourcetype == '.zip':
                 nodelist = rawcontent.namelist()
-            elif filetype == '.pck':
-                nodelist = [x[0] for x in rawcontent.listAddonFiles()]
+            elif sourcetype == '.pck':
+                nodelist = map(operator.itemgetter(0), rawcontent.listAddonFiles())
             self.treeview.set(moduleID, column='type', value='depdir')
             zsource = self.treeview.set(moduleID, column='source')
             for child in sorted(nodelist):
@@ -565,6 +571,10 @@ class treeExplorer(FilteredTree):
         if elemSource:
             self.vrtDisc.modResources('insert', elemName, parentid, elemEditable, elemSource)
         self.treeview.insert(parentid, 'end', iid = childId, text = elemName, values = (elemType, elemEditable, elemSource, '1.0' if elemType.endswith('file') else '' ))
+        if os.path.isdir(elemSource):
+            elemName = os.path.basename(elemSource)
+            dirvalues = (elemType, elemEditable, elemSource, '1.0')
+            self.insertDirectory(childId, elemName, values=dirvalues, excludeext=('.pyc', '.pyo'))
         if refreshFlag: self.onTreeSelection(parentid)
 
     def onInsertWeb(self):
@@ -600,6 +610,77 @@ class treeExplorer(FilteredTree):
         newDir = tkSimpleDialog.askstring('Insert directory', 'Input name for new directory')
         if not newDir: return
         self.insertTreeElem(parent, newDir, 'dir', True, '')
+
+    def onInsertAddon(self, addonresource):
+        if addonresource == 'addonfile':
+            pathName = tkFileDialog.askopenfilenames(filetypes=[('AddonIDE Files', '*.pck'), ('Archive Files', '*.zip'), ('All Files', '*.*')])
+            if not pathName: return
+            location = self.treeview.focus()
+            for fileSource in pathName:
+                fileExt = os.path.splitext(fileSource)[1]
+                fileName = os.path.basename(fileSource)
+                if fileExt not in ['.zip', '.pck']: continue
+                if fileExt == '.zip':
+                    zfile = zipfile.ZipFile(fileSource)
+                    filelist = zfile.namelist()
+                if fileExt == '.pck':
+                    zfile = FileGenerator.vrtDisk(file=fileSource)
+                    try:
+                        zfile.zipFileStr()
+                    except Exception as e:
+                        strMsg = "During insertion of %s, the following files weren't found:\n%s"
+                        tkMessageBox.showerror('Addon Insert', strMsg % (os.path.basename(fileSource),
+                                                                         str(e)))
+                        continue
+                    filelist = [x[0] for x in zfile.listAddonFiles()]
+                addonId = filelist[0].split('/', 1)[0]
+                addonxmlfile = '%s/addon.xml' % addonId
+                if addonxmlfile not in filelist: continue
+                if fileExt == '.zip':
+                    addonxmlstr = zfile.read(addonxmlfile)
+                elif fileExt == '.pck':
+                    addonxmlstr = zfile.getPathContent(addonxmlfile)
+                try:
+                    version = re.search(r'<addon.+?version="([^"]+)".*?>', addonxmlstr).group(1)
+                except:
+                    continue
+                dirname = '/'.join([location, addonId])
+                self.insertTreeElem(location, addonId, 'dir', False, '', refreshFlag=False)
+                addonzipfile = '%s-%s.zip' % (addonId, version)
+                filelist = filter(lambda x: x.count('/') == 1 and not (x.endswith('.py') or x.endswith('.txt')),
+                                  filelist)
+                for fileName in filelist:
+                    filesrc = '%s::%s' % (fileSource, fileName)
+                    fileName = '%s/%s' % (location, fileName)
+                    fileloc, fileName = os.path.split(fileName)
+                    self.insertTreeElem(fileloc, fileName, 'file', False, filesrc, refreshFlag=False)
+                self.insertTreeElem(dirname, addonzipfile, 'file', False, fileSource, refreshFlag=True)
+            pass
+        elif addonresource == 'addondir':
+            addondir = tkFileDialog.askdirectory(title = 'Addon Directory', initialdir = os.path.abspath('.'), mustexist=True)
+            if not addondir:return
+            addonxmlfile = os.path.join(addondir, 'addon.xml')
+            if not os.path.exists(addonxmlfile):
+                return tkMessageBox.showerror('Addon Directory', 'The addon.xml file for this addon directory was not found')
+            with open(addonxmlfile, 'rb') as fp:
+                addonxmlstr = fp.read()
+            try:
+                addonId = re.search(r'<addon.+?id="([^"]+)".*?>', addonxmlstr, re.DOTALL).group(1)
+                version = re.search(r'<addon.+?version="([^"]+)".*?>', addonxmlstr, re.DOTALL).group(1)
+            except:
+                tkMessageBox.showerror('Addon Directory', 'The addon.xml file does not have the required structure')
+            location = self.treeview.focus()
+            dirname = '/'.join([location, addonId])
+            addonzipfile = '%s-%s.zip' % (addonId, version)
+            self.insertTreeElem(location, addonId, 'dir', False, '', refreshFlag=False)
+            filelist = os.walk(addondir).next()[2]
+            filelist = filter(lambda x: os.path.splitext(x)[1] not in ('.md', '.py', '.txt', '.pyc', '.pyo'),
+                              filelist)
+            for fileName in filelist:
+                filesrc = os.path.join(addondir, fileName)
+                self.insertTreeElem(dirname, fileName, 'file', False, filesrc, refreshFlag=False)
+            self.insertTreeElem(dirname, addonzipfile, 'depdir', False, addondir, refreshFlag=True)
+        pass
 
 class ApiTree(FilteredTree):
     def __init__(self, master, xbmcThread):

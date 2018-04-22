@@ -116,13 +116,23 @@ class xmlFileWrapper():
     def getActivePane(self):
         return self.root.findall(self.paneId)[self.actPaneIndx]        
 
+    def setActivePane(self, paneToSelect):
+        if isinstance(paneToSelect, basestring):
+            paneLabels = map(lambda x: x.attrib['label'], self.root.findall(self.paneId))
+            try:
+                paneToSelect = paneLabels.index(paneToSelect)
+            except ValueError:
+                raise Exception('"%s" is not a panel' % paneToSelect)
+        return self.setActivePaneIndx(paneToSelect)
+
     def setActivePaneIndx(self, index = 0):
         self.actPaneIndx = index
-        
+        return self.getActivePane()
+
 class threadXmlFileWrapper(xmlFileWrapper):
     def __init__(self, xmlFile, kodiThreads):
-        xmlFileWrapper.__init__(self, xmlFile)
         self.kodiThreads = kodiThreads
+        xmlFileWrapper.__init__(self, xmlFile)
 
     def getActivePaneLabel(self):
         kodiThreads = self.kodiThreads
@@ -227,9 +237,13 @@ class settingsDisplay(tk.Frame):
         topPane.pack(side = tk.TOP, fill = tk.X)
         self.topPane = topPane
         imPath = os.path.abspath('./images/lockIcon.png')
-        lockImg = Image.open(imPath)
-        lockImg.thumbnail((20,20), Image.ANTIALIAS)
-        self.lockImg = ImageTk.PhotoImage(lockImg)
+        try:
+            lockImg = Image.open(imPath)
+        except:
+            self.lockImg = None
+        else:
+            lockImg.thumbnail((20,20), Image.ANTIALIAS)
+            self.lockImg = ImageTk.PhotoImage(lockImg)
         label = tk.Label(topPane, name='menuid', text="menuID",
                          compound=tk.LEFT,
                          font=('Times', '24', 'bold italic'))

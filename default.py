@@ -19,229 +19,137 @@ EMPTYCONTENT = [[{}, {"isFolder": True, "label": ""}, None]]
 import basicFunc
 from basicFunc import openUrl, parseUrlContent, makeXbmcMenu, getMenu, getMenuHeaderFooter, processHeaderFooter, getRegexFor, LISTITEM_KEYS, INFOLABELS_KEYS
 
+
 def rootmenu():
     menuContent = []
-    args["url"] = ["http://www.primewire.ag/"]
-    menuContent.extend(nav_tabs())
-    menuContent.append([{'menu': u'buscar', u'searchkeys': u'Title*search_keywords+Director*director+Starring*actor_name+Country*country'}, {'isFolder': True, 'label': 32015}, None])
+    menuContent.append([{'menu': u'mmoviesStrm'}, {'isFolder': True, 'label': 32009}, None])
+    menuContent.append([{'menu': u'tv_series'}, {'isFolder': True, 'label': 32016}, None])
+    iconList = ["Movies.png", "TV_Shows.png"]
+    for k, elem in enumerate(menuContent):
+        icon = iconList[min(k, len(iconList) - 1)]
+        elem[1]["iconImage"] = os.path.join(_media, icon)
     return menuContent
 
+def mmoviesStrm():
+    menuContent = []
+    menuContent.append([{u'url': u'http://watchfreeproject.tv/latest-added/', 'menu': u'latest'}, {'isFolder': True, 'label': 32024}, None])
+    menuContent.append([{u'url': u'http://watchfreeproject.tv/movies/', 'menu': u'genre'}, {'isFolder': True, 'label': 32017}, None])
+    menuContent.append([{u'url': u'http://watchfreeproject.tv/movies/', 'menu': u'years'}, {'isFolder': True, 'label': 32003}, None])
+    menuContent.append([{u'url': u'http://watchfreeproject.tv/movies-search/godfather', 'menu': u'search_movie'}, {'isFolder': True, 'label': 32032}, None])
+    iconList = ["Latest_Added.png", "Genre.png", "Year.png", "Search.png"]
+    for k, elem in enumerate(menuContent):
+        icon = iconList[min(k, len(iconList) - 1)]
+        elem[1]["iconImage"] = os.path.join(_media, icon)
+    return menuContent
 
-def buscar():      # Modified code
-    if args.has_key('searchkeys'):
-        searchKeys = args.get('searchkeys')[0]
-        searchKeys = searchKeys.split('+')
-        menuContent = []
-        for elem in searchKeys:
-            searchLabel, searchId = map(lambda x: x.strip(), elem.split('*'))
-            menuContent.append([{'searchid':searchId, 'menu': 'buscar'}, {'isFolder': True, 'label': 'buscar by ' + searchLabel}, None])
-        return menuContent
-    srchUrl = getRegexFor("<nodeId>", dir=_data)
+def tv_series():
+    menuContent = []
+    menuContent.append([{u'url': u'https://my-project-free.tv/schedule-tv/', 'menu': u'calendar'}, {'isFolder': True, 'label': 32005}, None])
+    menuContent.append([{u'url': u'https://my-project-free.tv/watch-series/', 'menu': u'series_A_Z'}, {'isFolder': True, 'label': 32006}, None])
+    menuContent.append([{u'url': u'https://my-project-free.tv/watch-series/', 'menu': u'tvsearch'}, {'isFolder': True, 'label': 32026}, None])
+    iconList = ["Last_7_Days.png", "AZ.png", "Search.png"]
+    for k, elem in enumerate(menuContent):
+        icon = iconList[min(k, len(iconList) - 1)]
+        elem[1]["iconImage"] = os.path.join(_media, icon)
+    return menuContent
+
+def search_movie():      # Modified code
+    srchUrl = getRegexFor("search_movie", dir=_data)[1]
     srchUrl = srchUrl[len('(?#<SEARCH>)'):]
-    import CustomRegEx
-    content = openUrl("http://www.primewire.ag/index.php?search")[1]
-    pattern = r'(?#<form id="searchform" .input<name="key" value=key>*>)'
-    srchKey = CustomRegEx.search(pattern, content).group('key')
-    srchUrl = srchUrl % srchKey
-    import xml.etree.ElementTree as ET
-    searchId     = args.get('searchid', ['all'])[0]
-    savedsearch = xbmc.translatePath('special://profile')
-    savedsearch = os.path.join(savedsearch, 'addon_data', 'plugin.video.1channelide','savedsearch.xml')
-    root = ET.parse(savedsearch).getroot() if os.path.exists(savedsearch) else ET.Element('searches')
 
-    if not args.has_key("tosearch") and os.path.exists(savedsearch):
-        existsSrch = root.findall("search")
-        if searchId != "all":
-            existsSrch = [elem for elem in existsSrch if elem.get("searchid") == searchId]
-        menuContent = []
-        for elem in existsSrch:
-           toSearch = "%s=%s" % (elem.get('searchid'), urllib.quote_plus(elem.get('tosearch')))
-           url = srchUrl.replace(elem.get('searchid') + '=', toSearch)
-           menuContent.append([{'menu':elem.get('menu'), 'url':url}, {'isFolder': True, 'label': elem.get('tosearch')}, None])
-        if menuContent:
-            menuContent.insert(0,[{'menu':'buscar', 'tosearch':'==>', 'searchid':searchId}, {'isFolder': True, 'label': 'Search by ' + searchId}, None])
-            return menuContent
-
-    kb = xbmc.Keyboard("", "Search for " + searchId , False)
+    kb = xbmc.Keyboard("", "Search for ", False)
     kb.doModal()
     if not (kb.isConfirmed()):return EMPTYCONTENT
     srchLabel = kb.getText()
-    toSearch = (searchId + "=" if searchId != 'all' else "") + urllib.quote_plus(srchLabel)
-    srchUrl = srchUrl.replace(searchId + '=', toSearch)
-    xbmc.log(srchUrl)
-    existsSrch = [elem for elem in root.findall("search") if elem.get("url") == srchUrl]
+    toSearch = urllib.quote_plus(srchLabel)
+    srchUrl = srchUrl.replace('<search>', toSearch)
+
     args["url"] = [srchUrl]
-    menuContent = pwire_copy()
-    if menuContent and not existsSrch:
-        toInclude = ET.Element('search', url = srchUrl, tosearch = srchLabel, menu = "pwire_copy", searchid = searchId)
-        root.insert(0, toInclude)
-        if not os.path.exists(os.path.dirname(savedsearch)):os.mkdir(os.path.dirname(savedsearch))
-        ET.ElementTree(root).write(savedsearch)
+    menuContent = latest()
     return menuContent
 
 
-
-
-
-
-def pwire_copy():
+def day_list():
     url = args.get("url")[0]
-    footmenu = getRegexFor("pwire_copy", type="rfoot", dir=_data)
+    limInf, limSup = eval(args.get("span", ["(0,0)"])[0])
+    compflags, regexp = getRegexFor("day_list", dir=_data)
+    url, data = openUrl(url)
+    subMenus = parseUrlContent(url, data, regexp, compflags, posIni = limInf, posFin = limSup)
+    menuContent = []
+    for elem in subMenus:
+        itemParam = dict([(key,elem.pop(key)) for key  in elem.keys() if key in LISTITEM_KEYS])
+        itemParam["isFolder"] = True
+        otherParam = {u'addonInfo': u'episode*(?P<name>.+?) Season (?P<season>\\d+) Episode (?P<episode>\\d+)'}
+        paramDict = dict([(key, value[0]) for key, value in args.items() if hasattr(value, "__getitem__") and key not in ["header", "footer"]])
+        paramDict.update({u'labeldefflag': 1, 'menu': u'resolvers'})
+        paramDict.update(elem)
+        menuContent.append([paramDict, itemParam, otherParam])
+    return menuContent
+
+def tvsearch():      # Modified code
+    url = args.get("url")[0]
+    regexp = getRegexFor("tvsearch", dir=_data)[1]
+    regexp = regexp[len('(?#<SEARCH>)'):]
+
+    kb = xbmc.Keyboard("", "Search for ", False)
+    kb.doModal()
+    if not (kb.isConfirmed()):return EMPTYCONTENT
+    srchLabel = kb.getText()
+    regexp = regexp.replace('<search>', srchLabel.title())
+
+    args["url"] = [url]
+    menuContent = episode_list(regex=regexp)
+    return menuContent
+
+
+def years():
+    url = args.get("url")[0]
+    compflags, regexp = getRegexFor("years", dir=_data)
+    url, data = openUrl(url)
+    subMenus = parseUrlContent(url, data, regexp, compflags)
+    iconList = ["year.png"]
+    for k in range(len(subMenus)):
+        kmod = min(k, len(iconList) - 1)
+        subMenus[k]["iconImage"] = os.path.join(_media, iconList[kmod])
+    menuContent = []
+    for elem in subMenus:
+        itemParam = dict([(key,elem.pop(key)) for key  in elem.keys() if key in LISTITEM_KEYS])
+        itemParam["isFolder"] = True
+        otherParam = {}
+        paramDict = dict([(key, value[0]) for key, value in args.items() if hasattr(value, "__getitem__") and key not in ["header", "footer"]])
+        paramDict.update({u'menu': u'latest', u'compflags': u''})
+        paramDict.update(elem)
+        menuContent.append([paramDict, itemParam, otherParam])
+    return menuContent
+
+def genre():
+    url = args.get("url")[0]
+    compflags, regexp = getRegexFor("genre", dir=_data)
+    url, data = openUrl(url)
+    subMenus = parseUrlContent(url, data, regexp, compflags)
+    iconList = ["Genre.png"]
+    for k in range(len(subMenus)):
+        kmod = min(k, len(iconList) - 1)
+        subMenus[k]["iconImage"] = os.path.join(_media, iconList[kmod])
+    menuContent = []
+    for elem in subMenus:
+        itemParam = dict([(key,elem.pop(key)) for key  in elem.keys() if key in LISTITEM_KEYS])
+        itemParam["isFolder"] = True
+        otherParam = {}
+        paramDict = dict([(key, value[0]) for key, value in args.items() if hasattr(value, "__getitem__") and key not in ["header", "footer"]])
+        paramDict.update({u'menu': u'latest', u'compflags': u'', u'icondefflag': 1})
+        paramDict.update(elem)
+        menuContent.append([paramDict, itemParam, otherParam])
+    return menuContent
+
+def latest():
+    url = args.get("url")[0]
+    footmenu = getRegexFor("latest", type="rfoot", dir=_data)
     if args.has_key("section"): url = processHeaderFooter(args.pop("section")[0], args, footmenu)
-    compflags, regexp = getRegexFor("pwire_copy", dir=_data)
+    compflags, regexp = getRegexFor("latest", dir=_data)
     url, data = openUrl(url)
     subMenus = parseUrlContent(url, data, regexp, compflags)
-    contextMenu = {"lista":[(u'', u'')], "replaceItems":False}
-    menuContent = []
-    for elem in subMenus:
-        itemParam = dict([(key,elem.pop(key)) for key  in elem.keys() if key in LISTITEM_KEYS])
-        itemParam["isFolder"] = True
-        otherParam = {}
-        otherParam["contextMenu"] = dict(contextMenu)
-        paramDict = dict([(key, value[0]) for key, value in args.items() if hasattr(value, "__getitem__") and key not in ["header", "footer"]])
-        paramDict.update({u'': u'', 'menu': u'pagediscrim', u'compflags': u're.DOTALL', u'icondefflag': 1, u'labeldefflag': 1})
-        paramDict.update(elem)
-        menuContent.append([paramDict, itemParam, otherParam])
-    menuContent += getMenuHeaderFooter("footer", args, data, footmenu)
-    return menuContent or EMPTYCONTENT
-
-def pagediscrim():
-    optionMenu = {u'TV Show': u'season'}
-    menuDef = "listadded"
-    url = args.get("url")[0]
-    regexp = r'<title>[^<]+\((?P<discrim>.+?)\)[^<]+</title>'
-    compflags = 0
-    urldata = openUrl(url, validate = False)[1]
-    match = re.search(regexp, urldata, compflags)
-    nxtmenu = getMenu(match.group(1), menuDef, optionMenu) if match else menuDef
-    return globals()[nxtmenu]()
-        
-
-# Deleted node playlist_sort
-
-def playlist_list():
-    url = args.get("url")[0]
-    headmenu = getRegexFor("playlist_list", type="rhead", dir=_data)
-    footmenu = getRegexFor("playlist_list", type="rfoot", dir=_data)
-    if args.has_key("section"):
-        fhmenu = headmenu if args["section"][0] == "header" else footmenu
-        url = processHeaderFooter(args.pop("section")[0], args, fhmenu)
-    compflags, regexp = getRegexFor("playlist_list", dir=_data)
-    url, data = openUrl(url)
-    subMenus = parseUrlContent(url, data, regexp, compflags)
-    contextMenu = {"lista":[(u'', u'')], "replaceItems":False}
-    menuContent = []
-    for elem in subMenus:
-        itemParam = dict([(key,elem.pop(key)) for key  in elem.keys() if key in LISTITEM_KEYS])
-        itemParam["isFolder"] = True
-        otherParam = {}
-        otherParam["contextMenu"] = dict(contextMenu)
-        paramDict = dict([(key, value[0]) for key, value in args.items() if hasattr(value, "__getitem__") and key not in ["header", "footer"]])
-        paramDict.update({'menu': u'playlist_media', u'compflags': u're.DOTALL|re.IGNORECASE', u'option': u'3'})
-        paramDict.update(elem)
-        menuContent.append([paramDict, itemParam, otherParam])
-    menuContent = getMenuHeaderFooter("header", args, data, headmenu) + menuContent
-    menuContent += getMenuHeaderFooter("footer", args, data, footmenu)
-    return menuContent
-
-def playlist_media():
-    url = args.get("url")[0]
-    compflags, regexp = getRegexFor("playlist_media", dir=_data)
-    url, data = openUrl(url)
-    subMenus = parseUrlContent(url, data, regexp, compflags)
-    contextMenu = {"lista":[(u'', u'')], "replaceItems":False}
-    optionMenu = {u'/tv-': u'season'}
-    menuDef = "listadded"
-    menuContent = []
-    for elem in subMenus:
-        itemParam = dict([(key,elem.pop(key)) for key  in elem.keys() if key in LISTITEM_KEYS])
-        menu = getMenu(elem["url"], menuDef, optionMenu)
-        itemParam["isFolder"] = menu != "media"
-        otherParam = {}
-        otherParam["contextMenu"] = dict(contextMenu)
-        paramDict = dict([(key, value[0]) for key, value in args.items() if hasattr(value, "__getitem__") and key not in ["header", "footer"]])
-        paramDict.update({u'labeldefflag': 1, u'urlin': u'/tv-', u'icondefflag': 1, u'compflags': u're.DOTALL|re.IGNORECASE'})
-        paramDict.update(elem)
-        paramDict["menu"] = menu
-        menuContent.append([paramDict, itemParam, otherParam])
-    return menuContent
-
-def season():
-    url = args.get("url")[0]
-    compflags, regexp = getRegexFor("season", dir=_data)
-    url, data = openUrl(url)
-    subMenus = parseUrlContent(url, data, regexp, compflags)
-    contextMenu = {"lista":[(u'', u'')], "replaceItems":False}
-    menuContent = []
-    for elem in subMenus:
-        itemParam = dict([(key,elem.pop(key)) for key  in elem.keys() if key in LISTITEM_KEYS])
-        itemParam["isFolder"] = True
-        otherParam = {}
-        otherParam["contextMenu"] = dict(contextMenu)
-        paramDict = dict([(key, value[0]) for key, value in args.items() if hasattr(value, "__getitem__") and key not in ["header", "footer"]])
-        paramDict.update({'menu': u'episode', u'urlin': u'?tv', u'urldata': u'TV Show', u'compflags': u'0', u'urlout': u'/tv-'})
-        paramDict.update(elem)
-        menuContent.append([paramDict, itemParam, otherParam])
-    return menuContent
-
-def episode():
-    url = args.get("url")[0]
-    compflags, regexp = getRegexFor("episode", dir=_data)
-    url, data = openUrl(url)
-    subMenus = parseUrlContent(url, data, regexp, compflags)
-    contextMenu = {"lista":[(u'', u'')], "replaceItems":False}
-    menuContent = []
-    for elem in subMenus:
-        itemParam = dict([(key,elem.pop(key)) for key  in elem.keys() if key in LISTITEM_KEYS])
-        itemParam["isFolder"] = True
-        otherParam = {}
-        otherParam["contextMenu"] = dict(contextMenu)
-        paramDict = dict([(key, value[0]) for key, value in args.items() if hasattr(value, "__getitem__") and key not in ["header", "footer"]])
-        paramDict.update({u'': u'', u'labeldefflag': 1, u'compflags': u're.DOTALL', u'icondefflag': 1, 'menu': u'listadded'})
-        paramDict.update(elem)
-        menuContent.append([paramDict, itemParam, otherParam])
-    return menuContent
-
-def nav_tabs():
-    url = args.get("url")[0]
-    compflags, regexp = getRegexFor("nav_tabs", dir=_data)
-    url, data = openUrl(url)
-    subMenus = parseUrlContent(url, data, regexp, compflags)
-    contextMenu = {"lista":[(u'', u'')], "replaceItems":False}
-    optionMenu = {u'3': u'playlist_list'}
-    menuDef = "pwire_movies"
-    menuContent = []
-    for k, elem in enumerate(subMenus):
-        itemParam = dict([(key,elem.pop(key)) for key  in elem.keys() if key in LISTITEM_KEYS])
-        menu = optionMenu.get(str(k), menuDef)
-        itemParam["isFolder"] = menu != "media"
-        otherParam = {}
-        otherParam["contextMenu"] = dict(contextMenu)
-        paramDict = dict([(key, value[0]) for key, value in args.items() if hasattr(value, "__getitem__") and key not in ["header", "footer"]])
-        paramDict.update({u'plainnode': 1, u'compflags': u're.DOTALL|re.IGNORECASE'})
-        paramDict.update(elem)
-        paramDict["menu"] = menu
-        menuContent.append([paramDict, itemParam, otherParam])
-    return menuContent
-
-# Deleted node genre_list
-
-
-# Deleted node sort_list
-
-def pwire_movies():
-    url = args.get("url")[0]
-    headmenu = getRegexFor("pwire_movies", type="rhead", dir=_data)
-    footmenu = getRegexFor("pwire_movies", type="rfoot", dir=_data)
-    if args.has_key("section"):
-        fhmenu = headmenu if args["section"][0] == "header" else footmenu
-        url = processHeaderFooter(args.pop("section")[0], args, fhmenu)
-    compflags, regexp = getRegexFor("pwire_movies", dir=_data)
-    url, data = openUrl(url)
-    subMenus = parseUrlContent(url, data, regexp, compflags)
-    contextMenu = {"lista":[(u'', u'')], "replaceItems":False}
-    optionMenu = {u'?tv': u'season'}
-    menu = getMenu(url, "listadded", optionMenu)
+    contextMenu = {"lista":[(u'Movie Information', u'XBMC.Action(Info)')], "replaceItems":False}
     menuContent = []
     for elem in subMenus:
         itemParam = dict([(key,elem.pop(key)) for key  in elem.keys() if key in LISTITEM_KEYS])
@@ -249,17 +157,15 @@ def pwire_movies():
         otherParam = {u'addonInfo': u'movie*(?P<name>.+?) \\((?P<year>\\d+)\\)'}
         otherParam["contextMenu"] = dict(contextMenu)
         paramDict = dict([(key, value[0]) for key, value in args.items() if hasattr(value, "__getitem__") and key not in ["header", "footer"]])
-        paramDict.update({u'labeldefflag': 1, u'compflags': u're.DOTALL', u'icondefflag': 1})
+        paramDict.update({u'labeldefflag': 1, 'menu': u'movieresolver'})
         paramDict.update(elem)
-        paramDict["menu"] = menu
         menuContent.append([paramDict, itemParam, otherParam])
-    menuContent = getMenuHeaderFooter("header", args, data, headmenu) + menuContent
     menuContent += getMenuHeaderFooter("footer", args, data, footmenu)
-    return menuContent
+    return menuContent or EMPTYCONTENT
 
-def listadded():
+def movieresolver():
     url = args.get("url")[0]
-    compflags, regexp = getRegexFor("listadded", dir=_data)
+    compflags, regexp = getRegexFor("movieresolver", dir=_data)
     url, data = openUrl(url)
     subMenus = parseUrlContent(url, data, regexp, compflags)
     menuContent = []
@@ -268,26 +174,134 @@ def listadded():
         itemParam["isFolder"] = False
         otherParam = {}
         paramDict = dict([(key, value[0]) for key, value in args.items() if hasattr(value, "__getitem__") and key not in ["header", "footer"]])
-        paramDict.update({'menu': u'media', u'compflags': u're.DOTALL|re.IGNORECASE'})
+        paramDict.update({'menu': u'media', u'compflags': u''})
+        paramDict.update(elem)
+        menuContent.append([paramDict, itemParam, otherParam])
+    return menuContent
+
+def series_A_Z():
+    url = args.get("url")[0]
+    compflags, regexp = getRegexFor("series_A_Z", dir=_data)
+    url, data = openUrl(url)
+    subMenus = parseUrlContent(url, data, regexp, compflags)
+    iconList = ["A.png", "B.png", "C.png", "D.png", "E.png", "F.png", "G.png", "H.png", "I.png", "J.png", "K.png", "L.png", "M.png", "N.png", "O.png", "P.png", "Q.png", "R.png", "S.png", "T.png", "U.png", "V.png", "W.png", "X.png", "Y.png", "Z.png", "0.png"]
+    for k in range(len(subMenus)):
+        kmod = min(k, len(iconList) - 1)
+        subMenus[k]["iconImage"] = os.path.join(_media, iconList[kmod])
+    menuContent = []
+    for elem in subMenus:
+        itemParam = dict([(key,elem.pop(key)) for key  in elem.keys() if key in LISTITEM_KEYS])
+        itemParam["isFolder"] = True
+        otherParam = {}
+        paramDict = dict([(key, value[0]) for key, value in args.items() if hasattr(value, "__getitem__") and key not in ["header", "footer"]])
+        paramDict.update({'menu': u'series_list'})
+        paramDict.update(elem)
+        paramDict["url"] = url
+        menuContent.append([paramDict, itemParam, otherParam])
+    return menuContent
+
+def series_list(regex=None):
+    url = args.get("url")[0]
+    limInf, limSup = eval(args.get("span", ["(0,0)"])[0])
+    if regex is None:
+        compflags, regexp = getRegexFor("series_list", dir=_data)
+    else:
+        compflags = 0
+    url, data = openUrl(url)
+    subMenus = parseUrlContent(url, data, regexp, compflags, posIni = limInf, posFin = limSup)
+    contextMenu = {"lista":[(u'Serie Information', u'XBMC.Action(Info)')], "replaceItems":False}
+    menuContent = []
+    for elem in subMenus:
+        itemParam = dict([(key,elem.pop(key)) for key  in elem.keys() if key in LISTITEM_KEYS])
+        itemParam["isFolder"] = True
+        otherParam = {u'addonInfo': u'tvshow*(?P<name>.+?)\\Z'}
+        otherParam["contextMenu"] = dict(contextMenu)
+        paramDict = dict([(key, value[0]) for key, value in args.items() if hasattr(value, "__getitem__") and key not in ["header", "footer"]])
+        paramDict.update({'menu': u'seasons', u'compflags': ''})
+        paramDict.update(elem)
+        menuContent.append([paramDict, itemParam, otherParam])
+    return menuContent
+
+
+def seasons():
+    url = args.get("url")[0]
+    compflags, regexp = getRegexFor("seasons", dir=_data)
+    url, data = openUrl(url)
+    subMenus = parseUrlContent(url, data, regexp, compflags)
+    menuContent = []
+    for elem in subMenus:
+        itemParam = dict([(key,elem.pop(key)) for key  in elem.keys() if key in LISTITEM_KEYS])
+        itemParam["isFolder"] = True
+        otherParam = {u'addonInfo': u'season*(?P<name>.+?) Season (?P<season>\\d+)'}
+        paramDict = dict([(key, value[0]) for key, value in args.items() if hasattr(value, "__getitem__") and key not in ["header", "footer"]])
+        paramDict.update({'menu': u'episode_list', u'compflags': u''})
+        paramDict.update(elem)
+        menuContent.append([paramDict, itemParam, otherParam])
+    return menuContent
+
+def episode_list():
+    url = args.get("url")[0]
+    footmenu = getRegexFor("episode_list", type="rfoot", dir=_data)
+    if args.has_key("section"): url = processHeaderFooter(args.pop("section")[0], args, footmenu)
+    compflags, regexp = getRegexFor("episode_list", dir=_data)
+    url, data = openUrl(url)
+    subMenus = parseUrlContent(url, data, regexp, compflags)
+    menuContent = []
+    for elem in subMenus:
+        itemParam = dict([(key,elem.pop(key)) for key  in elem.keys() if key in LISTITEM_KEYS])
+        itemParam["isFolder"] = True
+        otherParam = {u'addonInfo': u'episode*(?P<name>.+?) Season (?P<season>\\d+) Episode (?P<episode>\\d+)'}
+        paramDict = dict([(key, value[0]) for key, value in args.items() if hasattr(value, "__getitem__") and key not in ["header", "footer"]])
+        paramDict.update({u'labeldefflag': 1, u'compflags': u'', 'menu': u'resolvers'})
+        paramDict.update(elem)
+        menuContent.append([paramDict, itemParam, otherParam])
+    menuContent += getMenuHeaderFooter("footer", args, data, footmenu)
+    return menuContent or EMPTYCONTENT
+
+def calendar():
+    url = args.get("url")[0]
+    compflags, regexp = getRegexFor("calendar", dir=_data)
+    url, data = openUrl(url)
+    subMenus = parseUrlContent(url, data, regexp, compflags)
+    iconList = ["Last_7_Days.png"]
+    for k in range(len(subMenus)):
+        kmod = min(k, len(iconList) - 1)
+        subMenus[k]["iconImage"] = os.path.join(_media, iconList[kmod])
+    menuContent = []
+    for elem in subMenus:
+        itemParam = dict([(key,elem.pop(key)) for key  in elem.keys() if key in LISTITEM_KEYS])
+        itemParam["isFolder"] = True
+        otherParam = {}
+        paramDict = dict([(key, value[0]) for key, value in args.items() if hasattr(value, "__getitem__") and key not in ["header", "footer"]])
+        paramDict.update({'menu': u'day_list', u'compflags': u''})
+        paramDict.update(elem)
+        paramDict["url"] = url
+        menuContent.append([paramDict, itemParam, otherParam])
+    return menuContent
+
+def resolvers():
+    url = args.get("url")[0]
+    compflags, regexp = getRegexFor("resolvers", dir=_data)
+    url, data = openUrl(url)
+    subMenus = parseUrlContent(url, data, regexp, compflags)
+    menuContent = []
+    for elem in subMenus:
+        itemParam = dict([(key,elem.pop(key)) for key  in elem.keys() if key in LISTITEM_KEYS])
+        itemParam["isFolder"] = False
+        otherParam = {}
+        paramDict = dict([(key, value[0]) for key, value in args.items() if hasattr(value, "__getitem__") and key not in ["header", "footer"]])
+        paramDict.update({u'menu': u'media', u'compflags': u''})
         paramDict.update(elem)
         menuContent.append([paramDict, itemParam, otherParam])
     return menuContent
 
 def media():      # Modified code
     import teleresolvers
-    urlin = args.get("url")[0]
-    url = openUrl(urlin, validate = True)
-    if url.startswith("https://secure.link"):
-        url = url[20:].decode('base64')
-        url = url.split('::', 1)[0]
-    if not url.startswith("http://www.primewire.ag"):
-        videoUrl = url
-    else:
-        regexp = '<noframes>(?P<videourl>[^<]+)</noframes>'
-        compflags =re.DOTALL
-        url, data = openUrl(url)
-        subMenus = parseUrlContent(url, data, regexp, compflags )
-        videoUrl = subMenus[0]["videourl"]
+    url = args.get("url")[0]
+    compflags, regexp = getRegexFor("media", dir=_data)
+    url, data = openUrl(url)
+    subMenus = parseUrlContent(url, data, regexp)
+    videoUrl = subMenus[0]["videoUrl"]
     try:
         url = teleresolvers.getMediaUrl(videoUrl)
     except:

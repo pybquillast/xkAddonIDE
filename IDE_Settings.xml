@@ -13,4 +13,8 @@
     <setting id="appdir_xbmc" type="folder" label="special://xbmc:   " default=""/>
     <setting id="appdir_xbmchome" type="folder" label="special://home:   " default=""/>
   </category>
+  <category label="Repository Hosts">
+    <setting id="host_repository" type="optionlst" default="" label="Hosts Repositories" columnsheadings = "Label, TLS, Host, User, Password, Datadir" />
+  </category>
+
 </settings>

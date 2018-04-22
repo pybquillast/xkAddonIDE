@@ -115,9 +115,9 @@ def _parseXml(settingXmlFile):
         root = ET.fromstring(content)
     return root
 
-def _getThemeColour(srchcolor, theme='Confluence'):
-    import xbmc
+def _getThemeColour(srchcolor, theme='confluence'):
     if not re.match('[0-9ABCDEF]{8}\Z', srchcolor.upper()):
+        import xbmc
         pathName, skinDir = xbmc.translatePath('special://skin'), xbmc.getSkinDir()
         colorXml = theme + '.xml'
         files = ['defaults.xml', colorXml]
@@ -133,7 +133,8 @@ def _getThemeColour(srchcolor, theme='Confluence'):
             try:
                 colorTuple = ImageColor.getrgb(srchcolor)
             except ValueError:
-                color = colors.find('.//color[@name="invalid"]')
+                pass
+                # color = colors.find('.//color[@name="invalid"]')
             else:
                 if len(colorTuple) == 3: colorTuple += (255, )
                 return colorTuple
@@ -332,6 +333,7 @@ def getLabel(label, font, textcolor, background=None, xpos=0, ypos=0, **options)
     txt = Image.new('RGBA', (width, 10), (255, 255, 255, 0))
     d = ImageDraw.Draw(txt)
     txtsize = d.textsize(label, fnt, spacing=SPACING)
+    txtsize = (txtsize[0] or (txtsize[1] + 1), txtsize[1])   # Esto es una tonteria para tener en cuenta cuando txsize[0] es 0
     bshadow = options.get('shadowcolor', None)
     if bshadow: txtsize = (1 + txtsize[0], 1 + txtsize[1])
 
@@ -360,27 +362,89 @@ def getLabel(label, font, textcolor, background=None, xpos=0, ypos=0, **options)
     return background.paste(txt, box=(xpos, ypos), mask=txt)
 
 @memoize
-def ttfFile(ttf_url):
-    filename, headers = urllib.urlretrieve(ttf_url)
-    return filename
+def staticFile(filename_url):
+    if filename_url.startswith("http"):
+        filename_url, headers = urllib.urlretrieve(filename_url)
+    return filename_url
 
 @memoize
 def ccsCharCodeMap(css_url):
-    filename, headers = urllib.urlretrieve(css_url)
-    with open(filename, 'r') as f:
+    with open(css_url, 'r') as f:
         content = f.read()
-    pattern = r'^\.(fa-[a-z-]+):before\s\{\s+content:\s"\\([^"]+)";$'
+    pattern = r'^\.(fa-[a-z-]+):before\s\{\s+content:\s"\\([^"]+)";\s}$'
     charcode = re.findall(pattern, content, re.MULTILINE)
     charcode = map(lambda x: (x[0], unichr(int(x[1], 16))), charcode)
     charcode = dict(charcode)
-    pattern = r'^((?:\.fa-[a-z-]+:before,\s)+)\.fa-[a-z-]+:before\s\{\s+content:\s"\\([a-f0-9]+)";'
-    alias = re.findall(pattern, content, re.MULTILINE)
-    pattern = r'\.(fa-[a-z-]+):before,\s'
-    alias = map(lambda x: (re.findall(pattern, x[0]), unichr(int(x[1], 16))), alias)
-    for seq, value in alias:
-        aliasMap = dict.fromkeys(seq, value)
-        charcode.update(aliasMap)
+    # pattern = r'^((?:\.fa-[a-z-]+:before,\s)+)\.fa-[a-z-]+:before\s\{\s+content:\s"\\([a-f0-9]+)";'
+    # alias = re.findall(pattern, content, re.MULTILINE)
+    # pattern = r'\.(fa-[a-z-]+):before,\s'
+    # alias = map(lambda x: (re.findall(pattern, x[0]), unichr(int(x[1], 16))), alias)
+    # for seq, value in alias:
+    #     aliasMap = dict.fromkeys(seq, value)
+    #     charcode.update(aliasMap)
     return charcode
+
+def fontAwesomeIcon(iconStr, **styleRequested):
+    def processCSS(cssDict, cssToProcess):
+        toProcess = re.findall(r'([^:]+):([^;]+);', cssToProcess)
+        toProcess = map(lambda x: (x[0].strip(' \n'), x[1].strip(' \n')), toProcess)
+        cssDict.update(toProcess)
+
+    style = dict([('size', 240), ('color', 'ffff0000'), ('aspectratio','keep'),
+                    ('isPhotoImage', False)])
+
+    iconStr = 'fa-file fa-9x fa-ul fa-li fa-pulse'
+    iconStr = iconStr.strip()
+    if iconStr[:4] not in ['fas ', 'far ', 'fab ']:
+        iconStr = 'fas ' + iconStr
+
+
+    rootdir = os.path.dirname(__file__)
+    css_url = os.path.join(rootdir,'FontAwesome','fontawesome-all.css')
+    css_url = staticFile(css_url)
+    with open(css_url, 'r') as f:
+        css_content = f.read()
+
+    css_params = {}
+    prefix, sep, iconStr = iconStr.partition(' ')
+    pattern = r'@font-face\s\{([^}]+)}\s+(\.fa,)*\s\.%s' % prefix
+    match = re.search(pattern, css_content, re.MULTILINE|re.DOTALL)
+    processCSS(css_params, match.group(1))
+
+    pattern = r'^\.fa[^{]*\.%s,*[^{]* \{([^{]+)\}$' % prefix
+    match = re.search(pattern, css_content, re.MULTILINE|re.DOTALL)
+    processCSS(css_params, match.group(1))
+
+    pattern = r'^\.%s(:.+?)* \{(.+?)\}$'
+    for iconStr in iconStr.split(' '):
+        match = re.search(pattern % iconStr, css_content, re.MULTILINE|re.DOTALL)
+        if match is None: continue
+        processCSS(css_params, match.group(2))
+
+    print css_params
+
+    pattern = r'url\("([^(]+)"\) format\("([^(]+)"\)'
+    sources = dict(map(lambda x: (x[1], x[0]), re.findall(pattern, css_params['src'])))
+    ttf_file = os.path.basename(sources['truetype'])
+
+    ttf_url = os.path.join(rootdir,'FontAwesome',ttf_file)
+    ttf_url = staticFile(ttf_url)
+
+    style.update(styleRequested)
+
+    charCode = unichr(int(css_params['content'].strip('"\\'), 16))
+    imgFont = ImageFont.truetype(ttf_url, 150)
+    imageFile = getLabel(charCode, imgFont, style['color'])
+    size = style.get('size')
+    if isinstance(size, tuple):
+        width, height = size
+    else:
+        width = height = size
+    iconImg = getTexture(imageFile, width, height, aspectratio=style['aspectratio'])
+    if style['isPhotoImage']:
+        iconImg = ImageTk.PhotoImage(iconImg)
+    return iconImg
+
 
 def getFontAwesomeIcon(charname, **optionsreq):
     """
@@ -392,18 +456,18 @@ def getFontAwesomeIcon(charname, **optionsreq):
             color       : rgb color, rgb tuple. Default='white'
             isPhotoImage: True for a ImageTk.PhotoImage, default=False
     """
-    options = dict([('size', 24), ('color', 'white'), ('aspectratio','keep'),
+    options = dict([('size', 24), ('color', 'FFFFFF00'), ('aspectratio','keep'),
                     ('isPhotoImage', False)])
     options.update(optionsreq)
-    ttf_url = 'https://cdn.rawgit.com/FortAwesome/Font-Awesome/' \
-              'master/fonts/fontawesome-webfont.ttf'
-    css_url = "https://cdn.rawgit.com/FortAwesome/Font-Awesome/" \
-              "master/css/font-awesome.css"
-    filename = ttfFile(ttf_url)
+    rootdir = os.path.dirname(__file__)
+    ttf_url = os.path.join(rootdir,'FontAwesome','fa-solid-900.ttf')
+    ttf_url = staticFile(ttf_url)
+    css_url = os.path.join(rootdir,'FontAwesome','fontawesome-all.css')
+    css_url = staticFile(css_url)
     faMap = ccsCharCodeMap(css_url)
     charCode = faMap.get(charname)
     assert charCode is not None, '%s is not a define Font Awesome name' % charname
-    imgFont = ImageFont.truetype(filename, 150)
+    imgFont = ImageFont.truetype(ttf_url, 150)
     imageFile = getLabel(charCode, imgFont, options['color'])
     size = options.get('size')
     if isinstance(size, tuple):
@@ -416,9 +480,33 @@ def getFontAwesomeIcon(charname, **optionsreq):
     return iconImg
 
 if __name__ == '__main__':
-    iconString = bitMapToString(datab)
-    print iconString
-    icon = getIconImageTk(iconString)
-    icon.show()
-    print 'program terminated'
-    
+    # iconString = bitMapToString(datab)
+    # print iconString
+    # icon = getIconImageTk(iconString)
+    # icon.show()
+    # print 'program terminated'
+
+    def setFontAwesomeIcon(*args, **kwargs):
+        global newIcon, commOptions, boton1
+        print iconString.get()
+        try:
+            newIcon = fontAwesomeIcon(iconString.get(), **commOptions)
+        except:
+            newIcon = fontAwesomeIcon('fa-exclamation-triangle',**commOptions)
+        boton1.configure(image=newIcon)
+
+    root = tk.Tk()
+    root.configure(height=500, width=500)
+    iconString = tk.StringVar(root)
+    commOptions = dict(size=300,isPhotoImage=True, color='FFFF0000')
+
+    newIcon = fontAwesomeIcon('fa-bars', **commOptions)
+    texto = tk.Entry(root, text=iconString, width=50)
+    texto.pack()
+    boton1 = tk.Button(root, text="IMAGEN",height=500, width=500, image= newIcon)
+    boton1.pack()
+    boton2 = tk.Button(root, text="BOTON", command=setFontAwesomeIcon)
+    boton2.pack()
+    iconString.set('fa-file')
+    setFontAwesomeIcon()
+    root.mainloop()

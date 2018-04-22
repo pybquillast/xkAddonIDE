@@ -65,47 +65,74 @@ def openUrl(urlToOpen, validate = False):
         url.close()
     return toReturn
 
-def getForm(url, encodedHeaders, wait=0, **reqAttr):
+def getFormUrl(url, encodedHeaders, **reqAttr):
     urlStr = '<headers>'.join((url, encodedHeaders))
-    url, content = openUrl(urlStr)
+    urlStr, content = openUrl(urlStr)
     for key in reqAttr:
         reqAttr[key] = '%s="%s"' % (key, str(reqAttr[key]))
 
     for key in ('id', 'action'):
-        reqAttr[key] = reqAttr.get(key, key) + '=_%s_' % key
+        suffixFmt = '=_%s_'
+        if key in reqAttr.keys():
+            suffixFmt = suffixFmt.replace('_', '')
+        reqAttr[key] = reqAttr.get(key, key) + suffixFmt % key
 
     pattern = r'(?#<form %s>)' % ' '.join(reqAttr.values())
     m = CustomRegEx.search(pattern, content)
-    form = m.group()
-    pattern = r'(?#<input type="hidden" name=name value=value>)'
-    encodedHeaders = dict(urlparse.parse_qsl(encodedHeaders))
-    encodedHeaders = urllib.urlencode({'referer':url,
-                                       'User-Agent':encodedHeaders['User-Agent']})
-    if m.group('action'):
-        url = urllib.basejoin(url, m.group('action'))
-    formVars = CustomRegEx.findall(pattern, form)
-    if m.group('id'):
-        id = m.group('id')
-        pattern = r"^.+?name: '([^']+)', value: '([^']+)'.+?#%s.+?$" % id
-        prepend = re.findall(pattern, content, re.MULTILINE)
-        formVars = prepend + formVars
-    qte = urllib.quote
-    postdata = '&'.join(map(lambda x: '='.join(x),[(var1, qte(var2) if var2 else '') for var1, var2 in formVars]))
-    urlStr = '%s<post>%s<headers>%s' % (url, postdata, encodedHeaders)
-    if wait: time.sleep(wait)
-    content = openUrl(urlStr)[1]
+    try:
+        form = m.group()
+    except:
+        urlStr = ''
+    else:
+        pattern = r'(?#<input type="hidden" name=name value=value>)'
+        encodedHeaders = dict(urlparse.parse_qsl(encodedHeaders))
+        encodedHeaders = urllib.urlencode({'referer':url,
+                                           'User-Agent':encodedHeaders['User-Agent']})
+        if m.group('action'):
+            urlStr = urllib.basejoin(urlStr, m.group('action'))
+        formVars = CustomRegEx.findall(pattern, form)
+        if m.group('id'):
+            id = m.group('id')
+            pattern = r"^.+?name: '([^']+)', value: '([^']+)'.+?#%s.+?$" % id
+            prepend = re.findall(pattern, content, re.MULTILINE)
+            formVars = prepend + formVars
+        qte = urllib.quote
+        postdata = '&'.join(map(lambda x: '='.join(x),[(var1, qte(var2) if var2 else '') for var1, var2 in formVars]))
+        urlStr = '%s<post>%s<headers>%s' % (urlStr, postdata, encodedHeaders)
+    return urlStr
+
+def getForm(url, encodedHeaders, wait=0, **reqAttr):
+    urlStr = getFormUrl(url, encodedHeaders, **reqAttr)
+    if urlStr:
+        time.sleep(wait)
+        content = openUrl(urlStr)[1]
+    else:
+        raise Exception('No form found')
     return content
 
 def getJwpSource(content, sourcesLabel='sources', orderBy=None):
     pattern = r'%s[:=]\s*(\[[^\]]+\])' % sourcesLabel
     m = re.search(pattern, content)
     sources = m.group(1)
-    sources = sources.replace('\\"', '"')
-    for pattern in [r'(?<=[{,])[a-z]+(?=:)', r'(?<=:)[a-z]\w*(?=[,)])']:
-        sources = re.sub(pattern, lambda x: '"%s"'%x.group(), sources)
+    replaces = [('\\"', '"'), ('\'', '"'), ('\n', ''), ('\t', '')]
+    for toReplace, replaceFor in replaces:
+        sources = sources.replace(toReplace, replaceFor)
+    pattern = r'(?<=[{,])[a-z]+(?=:)'       # dictionary keys
+    sources = re.sub(pattern, lambda x: '"%s"'%x.group(), sources)
+
+    pattern = r'(?<=:).+?(?=[,}])'     # dictionary values
+    def normValue(x):
+        answ = x.group()
+        if x.group().startswith('"'): return answ
+        answ = answ.replace('"', '\\"')
+        return '"%s"' % answ
+    sources = re.sub(pattern, normValue, sources)
+
+    # for pattern in [r'(?<=[{,])[a-z]+(?=:)', r'(?<=:)[a-z]\w*(?=[,)])']:
+    #     sources = re.sub(pattern, lambda x: '"%s"'%x.group(), sources)
     sources = json.loads(sources)
     if orderBy:
-        sources = sorted(sources, key=lambda x: x[orderBy])
+        sources = sorted(sources, key=lambda x: x.get(orderBy, -1))
     key = set(['file', 'src']).intersection(sources[-1]).pop()
     return sources[-1][key]
 

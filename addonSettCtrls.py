@@ -27,7 +27,7 @@ class vertRadioMenu(tk.Frame):
         self.rightPane = settingPane
         
     def selOption(self, ene = None):
-        if ene: self.intVar.set(ene) 
+        if ene is not None: self.intVar.set(ene)
         selPane = self.intVar.get()
         if self.rightPane:
             self.rightPane.initFrameExec(selPaneIndx = selPane, saveChanges = True)

@@ -30,6 +30,9 @@ import resolverTools
 import teleresolvers
 import treeExplorer
 import xmlFileWrapper
+import idewidgets
+import ftplib
+import network
 from OptionsWnd import AppSettingDialog
 from ParseThreads import RegexpFrame, EditTransaction, StatusBar, addonFilesViewer
 
@@ -111,7 +114,7 @@ class XbmcAddonIDE(tk.Toplevel):
                 self.menuBar[name] = tk.Menu(menubutton, tearoff=False)
 
         commOptions.update([('color', 'PaleGreen1')])
-        self.menuIcon = menuIcon = iconImage('fa-navicon', **commOptions)
+        self.menuIcon = menuIcon = iconImage('fa-bars', **commOptions)
 
         self.viewPaneOp = viewPane = tk.Frame(menuFrame)
         viewPane.pack(side = tk.TOP, fill = tk.X)
@@ -138,8 +141,8 @@ class XbmcAddonIDE(tk.Toplevel):
         sideButtFrame = tk.Frame(frame, bg='light sea green')
         sideButtFrame.pack(side=tk.LEFT, fill=tk.Y)
 
-        self.newIcon = newIcon = iconImage('fa-file-o', **commOptions)
-        self.openIcon = openIcon = iconImage('fa-folder-open-o', **commOptions)
+        self.newIcon = newIcon = iconImage('fa-file', **commOptions)
+        self.openIcon = openIcon = iconImage('fa-folder-open', **commOptions)
         self.saveIcon = saveIcon = iconImage('fa-save', **commOptions)
 
         tk.Button(sideButtFrame, image=newIcon, command=self.newFile).pack(side=tk.TOP)
@@ -373,6 +376,7 @@ class XbmcAddonIDE(tk.Toplevel):
         menuOpt.append(('command', 'Export to XBMC','Ctrl+x', 0, self.onXbmcExport))
         menuOpt.append(('command', 'MakeZip File','Ctrl+M', 0, self.onMakeZipFile))
         menuOpt.append(('separator',))
+        menuOpt.append(('command', 'Settings','Ctrl+S', 0, self.programSettingDialog))
         menuOpt.append(('command', 'Close','Alt+Q', 0, self.Close))
         self.makeMenu('general_file', menuOpt)
         self.makeMenu('nav_menu', menuOpt)
@@ -388,7 +392,10 @@ class XbmcAddonIDE(tk.Toplevel):
                                          label = '{} {:30s}'.format(k+1, flabel),
                                          command = lambda x=filename: self.__openFile(x))
             self.menuBar['general_file'].add('separator')
-            self.menuBar['general_file'].add('command', label='Close',accelerator='Alt+Q', underline=0, command=self.Close)
+            self.menuBar['general_file'].add('command', label='Settings',accelerator='Ctrl+S',
+                                             underline=0, command=self.programSettingDialog)
+            self.menuBar['general_file'].add('command', label='Close',accelerator='Alt+Q',
+                                             underline=0, command=self.Close)
 
         self.menuBar['general_file'].config(postcommand = fileHist)
         self.menuBar['nav_menu'].config(postcommand = self.navMenuPostCommand)
@@ -430,10 +437,6 @@ class XbmcAddonIDE(tk.Toplevel):
         menuOpt.append(('command', 'Link','Ctrl+A', 0, self.newLink))
         self.makeMenu('design_edit.Insert_New', menuOpt)
         self.makeMenu('nav_menu_edit.Insert_New', menuOpt)
-        # menuOpt = []
-        # menuOpt.append(('command', 'New','Ctrl+S', 0, self.newParseKnot))
-        # menuOpt.append(('command', 'Set ActiveKnoth','Ctrl+A', 0, self.setActiveKnot))
-        # self.makeMenu('Knoth', menuOpt)
 
         menuOpt = []
         menuOpt.append(('checkbutton', 'Toggle Left Pane View', self.leftPaneVisible,[False, True]))
@@ -474,8 +477,6 @@ class XbmcAddonIDE(tk.Toplevel):
         menuOpt.append(('command', 'pretifyJS','Ctrl+P', 0, self.makeJavaScriptPretty))
         menuOpt.append(('separator',))        
         menuOpt.append(('command', 'Resolve Hyperlink','Ctrl+R', 0, self.resolveHyperlink))
-        menuOpt.append(('separator',))        
-        menuOpt.append(('command', 'Options','Ctrl+S', 0, self.programSettingDialog))
         self.makeMenu('design_tools', menuOpt)
         self.makeMenu('nav_menu_tools', menuOpt)
 
@@ -505,6 +506,9 @@ class XbmcAddonIDE(tk.Toplevel):
         master = self.menuBar[menuId]
         frstIndx, lstIndx = 7,  tk.END
         master.delete(frstIndx, lstIndx)
+        point_repository = self.addonSettings.getParam('point_repository')
+        if point_repository and point_repository != 'false':
+            master.add('command', label='Sincronize Repository', command=self.sincronizeRepo)
         if activeView == 'Design':
             master.add('separator')
             for mLabel in ['edit', 'get', 'tools']:
@@ -527,9 +531,38 @@ class XbmcAddonIDE(tk.Toplevel):
                              label = '{} {:30s}'.format(k+1, flabel),
                              command = lambda x=filename: self.__openFile(x))
         master.add('separator')
-        master.add('command', label='Close',accelerator='Alt+Q', underline=0, command=self.Close)
+        master.add('command', label='Settings',accelerator='Ctrl+S',
+                   underline=0, command=self.programSettingDialog)
+        master.add('command', label='Close',accelerator='Alt+Q',
+                   underline=0, command=self.Close)
 
-
+    def sincronizeRepo(self):
+        host_repository = self.ideSettings.getParam('host_repository')
+        if not host_repository:
+            tkMessageBox.showinfo('Sincronize Repository', 'No host repository detected.\n Got to Settings to set up a host')
+            k = None
+        else:
+            host_repository = map(lambda x: x.split(','), host_repository.split('|'))
+            k = len(host_repository) - 1
+            if k > 0:
+                menuLabel = [x[0] for x in host_repository]
+                k = idewidgets.kodiListBox('Select a Host', menuLabel, parent=self)
+        if k is None: return
+        label, tls, host, user, password, datadir = host_repository[k]
+        if not password:
+            password = tkSimpleDialog.askstring('Sincronize Repository', 'Enter Password for %s' % user, show='*')
+        try:
+            if tls == 'False':
+                ftp = ftplib.FTP(host=host, user=user, passwd=password)
+            else:
+                ftp = ftplib.FTP_TLS(host=host, user=user, passwd=password)
+                ftp.prot_p()
+        except:
+            tkMessageBox.showerror('Sincronize Repository', 'Imposible to connect to the selected Host')
+        else:
+            self.vrtDisc.sincronizeRepoTo(ftp, datadir)
+        finally:
+            ftp.close()
 
     def deOfuscate(self, tipo):
         content =  self.regexpEd.getContent()
@@ -622,27 +655,25 @@ class XbmcAddonIDE(tk.Toplevel):
             self.regexpEd.setContent(content, newUrl=False)
 
     def resolveHyperlink(self):
+        selRange = self.regexpEd.getSelRange() or self.regexpEd.getSelRange('actMatch')
         textw = self.regexpEd.txtEditor.textw
-        selRange = textw.tag_ranges('actMatch')
         if not selRange:
-            tkMessageBox.showerror('Error', 'No actual match detected')
-            return
-        selRange = textw.tag_nextrange("hyper", *selRange)
+            selRange = textw.tag_ranges('actMatch')
+            selRange = textw.tag_nextrange("hyper", *selRange)
         if not selRange:
-            tkMessageBox.showerror('Error', 'No hyperlink detected')
+            tkMessageBox.showerror('Error', 'No Selection or hyperlink detected')
             return
         hyperlnk = textw.get(*selRange)
         if not hyperlnk.startswith('http'):
             tkMessageBox.showerror('Error', 'Not a valid hyperlink.\n It must start with http:// or https://')
             return
-
         try:
-            import urlresolver
+            import teleresolvers
         except:
-            tkMessageBox.showerror('Import Error', 'Module urlresolver not available')
+            tkMessageBox.showerror('Import Error', 'Module teleresolvers not available')
         else:
             try:
-                media_url = urlresolver.HostedMediaFile(url=hyperlnk).resolve()
+                media_url = teleresolvers.getMediaUrl(hyperlnk)
             except Exception as e:
                 tkMessageBox.showerror('Urlresolver Error', e)
             else:

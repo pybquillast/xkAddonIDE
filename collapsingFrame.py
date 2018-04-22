@@ -11,22 +11,22 @@ class collapsingFrame(tk.Frame):
         tk.Frame.__init__(self, master)
         self.buttIcon = {}
         iconImage = imgp.getFontAwesomeIcon
-        commOptions = dict(size=BAND_WIDTH,isPhotoImage=True, color='black')
+        commOptions = dict(size=BAND_WIDTH,isPhotoImage=True, color='00000000')
         if len(buttConf) == 2:
             if orientation == tk.VERTICAL:
-                self.buttIcon['M'] = iconImage('fa-caret-square-o-left', **commOptions)
-                self.buttIcon['m'] = iconImage('fa-caret-square-o-right', **commOptions)
+                self.buttIcon['M'] = iconImage('fa-caret-square-left', **commOptions)
+                self.buttIcon['m'] = iconImage('fa-caret-square-right', **commOptions)
                 if 'R' in buttConf:
-                    faIcon = 'fa-caret-square-o-right' if 'M' in buttConf else 'fa-caret-square-o-left'
+                    faIcon = 'fa-caret-square-right' if 'M' in buttConf else 'fa-caret-square-left'
                     self.buttIcon['R'] = iconImage(faIcon, **commOptions)
             else:
-                self.buttIcon['M'] = iconImage('fa-caret-square-o-up', **commOptions)
-                self.buttIcon['m'] = iconImage('fa-caret-square-o-down', **commOptions)
+                self.buttIcon['M'] = iconImage('fa-caret-square-up', **commOptions)
+                self.buttIcon['m'] = iconImage('fa-caret-square-down', **commOptions)
                 if 'R' in buttConf:
-                    faIcon = 'fa-caret-square-o-down' if 'M' in buttConf else 'fa-caret-square-o-up'
+                    faIcon = 'fa-caret-square-down' if 'M' in buttConf else 'fa-caret-square-up'
                     self.buttIcon['R'] = iconImage(faIcon, **commOptions)
 
-                self.buttIcon['R'] = iconImage('fa-caret-square-o-down', **commOptions)
+                self.buttIcon['R'] = iconImage('fa-caret-square-down', **commOptions)
         else:
             self.buttIcon['M'] = iconImage(imgp.FA_WINDOW_MAX, **commOptions)
             self.buttIcon['R'] = iconImage(imgp.FA_WINDOW_RES, **commOptions)

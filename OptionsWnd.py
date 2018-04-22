@@ -21,48 +21,174 @@ import re
 import shutil
 import zipfile
 import operator
+import importlib
 
 import StringIO
 
-def widgetFactory(master, settings, selPane):
+def widgetFactory(master, settings, selPane, panelModule=None, k=-1):
+    widgetTypes = dict(sep=settSep, lsep=settSep,
+                       text=settText,
+                       optionlst=settOptionList,
+                       number=settNumber, ipaddress=settNumber,
+                       slider=settSlider,
+                       bool=settBool,
+                       enum=settEnum, labelenum=settEnum,
+                       drpdwnlst=settDDList,
+                       file=settFile, audio=settFile, video=settFile, image=settFile, executable=settFile,
+                       folder=settFolder,
+                       filernum=settFileenum,
+                       action=settAction,
+                       container=settContainer)
+
+    if not panelModule and selPane.get('lib'):
+        panelModule = selPane.get('lib')
+        panelModule = importlib.import_module(panelModule)
     enableEc = []
-    for k, setting in enumerate(selPane.findall('setting')):
-        setting.attrib['name'] = str(k)
-        if setting.attrib.get('enable', None):
+    for setting in selPane.findall('setting'):
+        k += 1
+        options = setting.attrib
+        options['name'] = str(k)
+        if options.get('enable', None):
             enableEc.append((k, setting.attrib['enable']))
-        if setting.get('type') in ['sep', 'lsep']:
-            dummy = settSep(master, **setting.attrib)
-        elif setting.get('type') == 'text':
-            dummy = settText(master, **setting.attrib)
-        elif setting.get('type') == 'optionlst':
-            dummy = settOptionList(master, **setting.attrib)
-        elif setting.get('type') in ['number', 'ipaddress'] :
-            dummy = settNumber(master, **setting.attrib)
-        elif setting.get('type') == 'slider':
-            dummy = settSlider(master, **setting.attrib)
-        elif setting.get('type') == 'bool':
-            dummy = settBool(master, **setting.attrib)
-        elif setting.get('type') in ['enum', 'labelenum']:
-            dummy = settEnum(master, **setting.attrib)
-        elif setting.get('type') == 'drpdwnlst':
-            dummy = settDDList(master, **setting.attrib)
-        elif setting.get('type') in ["file", "audio", "video", "image","executable"]:
-            dummy = settFile(master, **setting.attrib)
-        elif setting.get('type') == 'folder':
-            dummy = settFolder(master, **setting.attrib)
-        elif setting.get('type') == 'fileenum':
-            dummy = settFileenum(master, **setting.attrib)
-        elif setting.get('type') == 'action':
-            dummy = settAction(master, **setting.attrib)
-        try:
+        wType = options.get('type')
+        widgetClass = widgetTypes.get(wType, None)
+        assert widgetClass is not None, 'The setting type "%s" is not a define type. \n' \
+                                        'It must me one of: %s ' % (wType, ', '.join(sorted(widgetTypes.keys())))
+        wId = options.get('id')
+        if wId and panelModule and hasattr(panelModule, wId):
+            idClass = getattr(panelModule, wId)
+            assert issubclass(idClass, widgetClass), \
+                'In module %s the class "%s" must be ' \
+                'inherited from %s' % (panelModule.__name__, wId, widgetClass.__name__)
+            setattr(idClass, 'me', master)
+            widgetClass = idClass
+
+        dummy = widgetClass(master, **options)
+        if wType == 'container':
+            k, deltEnableEc = widgetFactory(dummy, settings, setting, panelModule=panelModule, k=k)
+            enableEc += deltEnableEc
+        if hasattr(dummy, 'id'):
             key = dummy.id
-        except:
-            pass
-        else:
             if settings and settings.has_key(key):
                 dummy.setValue(settings[key])
-    return enableEc
+            dummy.form.registerWidget(key, dummy.path)
+    return k, enableEc
 
+class formFrame(tk.Frame):
+    def __init__(self, master, settings, selPane, background="#ffffff"):
+        tk.Frame.__init__(self, master, background=background)
+        self.settings = {}
+        self.enEquations = {}
+        self.dependents = {}
+        self.widgetMapping = {}
+        self.nameToId = {}
+        self.radioGroups = {}
+
+        self.populateWithSettings(settings, selPane)
+
+    def __getattr__(self, attr):
+        if attr in self.__dict__['widgetMapping']:
+            widgetMapping = self.__dict__['widgetMapping']
+            wpath = widgetMapping.get(attr)
+            widget = self
+            while wpath:
+                wdName, wpath = wpath.partition('.')[0:3:2]
+                widget = widget.nametowidget(wdName)
+            return widget
+        raise AttributeError()
+
+
+    def populateWithSettings(self, settings, selPane):
+        # try:
+            enableEq = widgetFactory(self, settings, selPane)[1]
+            self.nameToId = {value.rsplit('.', 1)[-1]:key for key, value in self.widgetMapping.items()}
+            self.category = selPane.get('label')
+            self.registerEc(enableEq)
+            self.setDependantWdgState()
+            self.registerChangeListeners()
+        # except Exception as e:
+        #     for child in self.winfo_children():
+        #         child.pack_forget()
+        #     message = 'FORM ERROR:\n' + str(e)
+        #     tk.Label(self, text=message, fg='#ff0000', wraplength=100).pack(expand=1, fill=tk.BOTH)
+
+    def registerEc(self, enableEquations):
+        for posWidget, enableEc in enableEquations:
+            enableEc = self.getAbsEcuation(posWidget, enableEc)
+            wVars = map(str, self.findVars(enableEc))
+            assert set(wVars).issubset(self.nameToId), 'The enable equation for "%s" widget' \
+                                                       ' reference a non id widget' \
+                                                       % (self.nameToId[str(posWidget)])
+            for elem in wVars:
+                self.dependents[elem] = self.dependents.get(elem,[]) + [str(posWidget)]
+            self.enEquations[str(posWidget)] = enableEc.replace('+', ' and ')
+
+    def getAbsEcuation(self, pos, enableEc):
+        for tag in ['eq(', 'lt(', 'gt(']:
+            enableEc = enableEc.replace(tag, tag + '+')
+        enableEc = enableEc.replace('+-', '-').replace('!', 'not ')
+        enableEc = enableEc.replace('true','True').replace('false','False').replace(',)',',None)')
+        for tag in ['eq(', 'lt(', 'gt(']:
+            enableEc = enableEc.replace(tag, tag + str(pos))
+        return enableEc
+
+    def findVars(self, enableEc):
+        enableEc = enableEc.replace('not ', '').replace('*', '+')
+        eq = lt = gt = lambda x, a: [x]
+        vars = eval(enableEc)
+        try:
+            retval = set(vars)
+        except:
+            retval = []
+        else:
+            retval = list(retval)
+        return retval
+        # return [elem for k, elem in enumerate(vars) if elem not in vars[0:k]]
+
+    def findWidgetState(self, enableEq):
+        eq = lambda x,a:getattr(self, self.nameToId[str(x)]).getValue() == a
+        lt = lambda x,a:getattr(self, self.nameToId[str(x)]).getValue() < a
+        gt = lambda x,a:getattr(self, self.nameToId[str(x)]).getValue() > a
+        state = eval(enableEq) >= 1
+        return tk.NORMAL if state else tk.DISABLED
+
+    def setDependantWdgState(self):
+        for key in sorted(self.enEquations.keys(), key = int):
+            enableEq = self.enEquations[key]
+            calcState = self.findWidgetState(enableEq)
+            theFrame = self.children[key]
+            try:
+                idKey = theFrame.id
+                theFrame.children[idKey].configure(state = calcState)
+            except:
+                pass
+
+    def registerChangeListeners(self):
+        for key in self.dependents.keys():
+            self.children[key].setListener(self.varChange)
+
+    def varChange(self, widgetName):
+        for widget in self.dependents[widgetName]:
+            enableEq = self.enEquations[widget]
+            calcState = self.findWidgetState(enableEq)
+            theFrame = self.children[widget]
+            try:
+                idKey = theFrame.id
+                theFrame.children[idKey].configure(state = calcState)
+            except:
+                pass
+
+    def registerWidget(self, wdId, wdPath):
+        self.widgetMapping[wdId] = wdPath
+
+    def getWidgets(self):
+        return [getattr(self, key) for key in self.widgetMapping.keys()]
+
+    def getGroupVar(self, groupName):
+        return self.radioGroups.setdefault(groupName, tk.StringVar())
+
+    def getGroupValue(self, groupName):
+        return self.radioGroups[groupName].get()
 
 class scrolledFrame(tk.Frame):
     def __init__(self, master, settings, selPane):
@@ -70,15 +196,19 @@ class scrolledFrame(tk.Frame):
         tk.Frame.__init__(self, master)
         self.pack(side = tk.TOP, fill = tk.BOTH, expand = 1)
         self.canvas = tk.Canvas(self, borderwidth=0, background="#ffffff")
-        self.frame = tk.Frame(self.canvas, background="#ffffff")
+        # self.frame = tk.Frame(self.canvas, background="#ffffff")
+        # self.frame.pack()
+        # self.populateWithSettings(settings, selPane)
+        self.category = selPane.get('label')
+        self.frame = formFrame(self.canvas, settings, selPane, background="#ffffff")
         self.frame.pack()
-        self.populateWithSettings(settings, selPane)
+
         self.vsb = tk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
         self.canvas.configure(yscrollcommand=self.vsb.set)
 
         self.vsb.pack(side="right", fill="y")
         self.canvas.pack(side="left", fill="both", expand=True)
-        self.canvas.create_window((4,4), window=self.frame, anchor="nw", 
+        self.canvas.create_window((4,4), window=self.frame, anchor="nw",
                                   tags="self.frame")
         self.canvas.bind("<Configure>", self.OnCanvasConfigure)
 
@@ -92,96 +222,21 @@ class scrolledFrame(tk.Frame):
         self.frame.configure(width = event.width, height = y2-y1)
         self.frame.pack_propagate(0)
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-                   
-    def populateWithSettings(self, settings, selPane):
-        enableEq = widgetFactory(self.frame, settings, selPane)
-        self.category = selPane.get('label')
-        self.registerEc(enableEq)
-        self.setDependantWdgState()
-        self.registerChangeListeners()
-        
+
     def modifySettingsValues(self, settings, filterFlag = lambda widget: hasattr(widget, 'id')):
         widgets = self.widgets(filterFlag)
         map(lambda w: w.setValue(settings.get(w.id, w.default)), widgets)
-            
-    def registerChangeListeners(self):
-        for key in self.dependents.keys():
-            self.frame.children[key].setListener(self.varChange)
-            
-    def varChange(self, widgetName):
-        interiorFrame = self.frame
-        for widget in self.dependents[widgetName]:
-            enableEq = self.enEquations[widget]
-            calcState = self.findWidgetState(enableEq)
-            theFrame = interiorFrame.children[widget]
-            try:
-                idKey = theFrame.id
-                theFrame.children[idKey].configure(state = calcState)
-            except:
-                pass
-            
 
-    def setDependantWdgState(self):
-        interiorFrame = self.frame
-        for key in sorted(self.enEquations.keys(), key = int):
-            enableEq = self.enEquations[key]
-            calcState = self.findWidgetState(enableEq)
-            theFrame = interiorFrame.children[key]
-            try:
-                idKey = theFrame.id
-                theFrame.children[idKey].configure(state = calcState)
-            except:
-                pass
-        
-            
-    def registerEc(self, enableEquations):
-        for posWidget, enableEc in enableEquations:
-            enableEc = self.getAbsEcuation(posWidget, enableEc)
-            wVars = self.findVars(enableEc)
-            for elem in wVars:
-                self.dependents[str(elem)] = self.dependents.get(str(elem),[]) + [str(posWidget)]
-            self.enEquations[str(posWidget)] = enableEc.replace('+', ' and ')
-        
-    def findWidgetState(self, enableEq):
-        eq = lambda x,a:self.frame.children[str(x)].getValue() == a
-        lt = lambda x,a:self.frame.children[str(x)].getValue() < a
-        gt = lambda x,a:self.frame.children[str(x)].getValue() > a
-        state = eval(enableEq) >= 1
-        return tk.NORMAL if state else tk.DISABLED
-        
     def initDescenAscend(self):
         self.settings = {}
         self.enEquations = {}
-        self.dependents = {}        
-        
-    def findVars(self, enableEc):
-        enableEc = enableEc.replace('not ', '').replace('*', '+')
-        eq = lt = gt = lambda x, a: [x]
-        vars = eval(enableEc)
-        try:
-            retval = set(vars)
-        except:
-            retval = []
-        else:
-            retval = list(retval)
-        return retval
-        # return [elem for k, elem in enumerate(vars) if elem not in vars[0:k]]
-         
-        
-    def getAbsEcuation(self, pos, enableEc):
-        for tag in ['eq(', 'lt(', 'gt(']:
-            enableEc = enableEc.replace(tag, tag + '+')
-        enableEc = enableEc.replace('+-', '-').replace('!', 'not ')
-        enableEc = enableEc.replace('true','True').replace('false','False').replace(',)',',None)')
-        for tag in ['eq(', 'lt(', 'gt(']:
-            enableEc = enableEc.replace(tag, tag + str(pos))
-        return enableEc
+        self.dependents = {}
+        self.widgetMapping = {}
 
-    def getChangeSettings(self, settings):                
+    def getChangeSettings(self, settings):
         interiorFrame = self.frame
-        changedSettings = dict(reset = []) 
-        for childName in sorted(interiorFrame.children.keys(), key = int):
-            child = interiorFrame.children[childName]
+        changedSettings = dict(reset = [])
+        for child in interiorFrame.getWidgets():
             try:
                 flag = child.isValueSetToDefault()
             except:
@@ -192,17 +247,17 @@ class scrolledFrame(tk.Frame):
                     changedSettings[key] = value
                 elif key and settings.has_key(key):
                     changedSettings['reset'].append(key)
-        filterFlag = lambda key: (not settings.has_key(key) or settings[key] != changedSettings[key]) 
-        toProcess = dict([(key, value) for key, value in changedSettings.items() if filterFlag(key)])        
+        filterFlag = lambda key: (not settings.has_key(key) or settings[key] != changedSettings[key])
+        toProcess = dict([(key, value) for key, value in changedSettings.items() if filterFlag(key)])
         return toProcess
-    
+
     def widgets(self, filterFunc = None):
-        allWidgets = self.frame.children.values() 
+        allWidgets = self.frame.getWidgets()
         return [aWidget for aWidget in allWidgets if filterFunc(aWidget)] if filterFunc else allWidgets
 
     def getAllSettings(self, keyfunc = None):
         keyfunc = keyfunc or operator.attrgetter('id')
-        allwidgets = self.widgets(filterFunc = lambda widget: hasattr(widget, 'id'))
+        allwidgets = self.frame.getWidgets()
         allwidgets.sort(key = keyfunc)
         return [widget.getSettingPair(tId = True) for widget in allwidgets]
 
@@ -211,48 +266,59 @@ class scrolledFrame(tk.Frame):
 class baseWidget(tk.Frame):
     def __init__(self, master, **options):
         self._id = options.pop('id')
-        wdgName = options.pop('name').lower()
-        if options.has_key('varType'): self.setVarType(options.pop('varType')) 
+        wdgName = options.get('name').lower()
+        if options.has_key('varType'): self.setVarType(options.pop('varType'))
         self.default = None
-        baseConf = dict(name = wdgName, bd = 1, highlightbackground='dark grey', highlightthickness = 2, highlightcolor = 'green', takefocus = 1)
-        baseConf.update(options) 
+        baseConf = dict(name=wdgName, bd=1, highlightbackground='dark grey', highlightthickness=2,
+                        highlightcolor='green', takefocus=1)
+        baseConf.update(options)
+        if isinstance(master, settContainer):
+            self.path = master.path + '.' + baseConf.get('name', '')
+            self.form = master.form
+        else:
+            self.path = baseConf.get('name', '')
+            self.form = master
         tk.Frame.__init__(self, master, **baseConf)
-        self.pack(side = tk.TOP, fill = tk.X, expand = 1, ipadx = 2, ipady = 2, padx = 1, pady = 1)
-        
-    def setVarType(self, varType = 'string'):
-        if   varType == 'int'    : self.value = tk.IntVar()
-        elif varType == 'double' : self.value = tk.DoubleVar()
-        elif varType == 'boolean': self.value = tk.BooleanVar()
-        else: self.value = tk.StringVar()
-        
+        packSide = master.side if isinstance(master, settContainer) else tk.TOP
+        self.pack(side=packSide, fill=tk.X, ipadx=2, ipady=2, padx=1, pady=1)
 
-    def getSettingPair(self, tId = False):
+    def setVarType(self, varType='string'):
+        if varType == 'int':
+            self.value = tk.IntVar()
+        elif varType == 'double':
+            self.value = tk.DoubleVar()
+        elif varType == 'boolean':
+            self.value = tk.BooleanVar()
+        else:
+            self.value = tk.StringVar()
+
+    def getSettingPair(self, tId=False):
         id = self._id if tId else self.id
         return (id, self.getValue())
-    
+
     def isValueSetToDefault(self):
         return self.getValue() == self.default
-    
+
     def setValue(self, value):
         self.value.set(value)
 
     def getValue(self):
         return self.value.get()
-    
+
     def setListener(self, function):
         self.listener = function
         self.value.trace("w", self.callListener)
 
     def callListener(self, *args):
         self.listener(self.name)
-        
+
 class settLabel(baseWidget):
     def __init__(self, master, **options):
-        wdgName = options.pop('name').lower()
+        wdgName = options.get('name').lower()
         baseWidget.__init__(self, master, varType = 'string', name = wdgName, id = options.get('id', ''))
         self.setGUI(options)
         self.name = wdgName
-                
+
     def setGUI(self, options):
         tk.Label(self, text = options.get('label'), width=20, anchor=tk.NW).pack(side = tk.LEFT, fill = tk.X, expand = 1)
 
@@ -261,7 +327,7 @@ class myScrolledList(tk.Frame):
         tk.Frame.__init__(self, master)
         self.setGUI()
         self.bind_all('<Down>', self.nextWidget)
-        self.bind_all('<Up>', self.prevWidget)        
+        self.bind_all('<Up>', self.prevWidget)
         self.widgetContainer.children['label0'].focus_force()
 
     def nextWidget(self, event):
@@ -279,7 +345,7 @@ class myScrolledList(tk.Frame):
             self.yview(tk.SCROLL, 1, tk.UNITS)
         widget.focus_force()
         return 'break'
-    
+
     def prevWidget(self, event):
         name = event.widget.name
         k = (int(name[5:]) + 15 - 1) % 15
@@ -296,7 +362,7 @@ class myScrolledList(tk.Frame):
         widget.focus_force()
         return 'break'
 
-    
+
     def setGUI(self):
         self.vsb = tk.Scrollbar(self, orient="vertical", command=self.yview)
         self.vsb.pack(side = tk.RIGHT, fill = tk.Y)
@@ -308,7 +374,7 @@ class myScrolledList(tk.Frame):
         for k in range(15):
             label = settLabel(self.widgetContainer, name = 'label' + str(k), label = 'Opcion ' + str(k))
         self.widgetContainer.place(relwidth = 1.0, y = 0)
-        
+
     def yview(self, mType, nUnits, uType = None):
         page = self.leftPane.winfo_height()
         step = self.widgetContainer.winfo_height()/len(self.widgetContainer.children)
@@ -328,22 +394,22 @@ class myScrolledList(tk.Frame):
         last = first + float((1.0*page)/self.widgetContainer.winfo_height())
         self.vsb.set(first, last)
 
-        
+
 class settFileenum(baseWidget):
     def __init__(self, master, **options):
-        wdgName = options.pop('name').lower()
+        wdgName = options.get('name').lower()
         baseWidget.__init__(self, master, varType = 'string', name = wdgName, id = options.get('id', ''))
         self.setGUI(options)
         self.name = wdgName
-        
+
     def setGUI(self, options):
         tk.Label(self, text = options.get('label'), width=20, anchor=tk.NW).pack(side = tk.LEFT)
-        self.id = options.get('id').lower()
+        if options.get('id'): self.id = options.get('id').lower()
         self.default = options.get('default', '')
         self.setValue(self.default)
         spBoxValues = self.getFileList(options)
         tk.Spinbox(self, name = self.id, textvariable = self.value, values = spBoxValues).pack(side = tk.RIGHT, fill = tk.X, expand = 1)
-        
+
     def getFileList(self, options):
         basepath = os.path.abspath('.')
         values = options.get('values','')
@@ -358,40 +424,40 @@ class settFileenum(baseWidget):
             if options.get('hideext', 'true') == 'true':
                 filenames  = [elem.split('.')[0] for elem in filenames]
             return filenames
-        
+
 class settFolder(baseWidget):
     def __init__(self, master, **options):
-        wdgName = options.pop('name').lower()
+        wdgName = options.get('name').lower()
         baseWidget.__init__(self, master, varType = 'string', name = wdgName, id = options.get('id', ''))
         self.setGUI(options)
         self.name = wdgName
-        
+
     def setGUI(self, options):
         tk.Label(self, text = options.get('label'), width=20, anchor=tk.NW).pack(side = tk.LEFT)
-        self.id = options.get('id').lower()
+        if options.get('id'): self.id = options.get('id').lower()
         self.default = options.get('default', '')
         self.setValue(self.default)
         tk.Button(self, name = self.id, textvariable = self.value, command = self.getFolder ).pack(side = tk.RIGHT, fill = tk.X, expand = 1)
-        
+
     def getFolder(self):
         folder = tkFileDialog.askdirectory()
         if folder:
             self.value.set(folder)
-        
+
 class settFile(baseWidget):
     def __init__(self, master, **options):
-        wdgName = options.pop('name').lower()
+        wdgName = options.get('name').lower()
         baseWidget.__init__(self, master, varType = 'string', name = wdgName, id = options.get('id', ''))
         self.setGUI(options)
         self.name = wdgName
-        
+
     def setGUI(self, options):
         tk.Label(self, text = options.get('label'), width=20, anchor=tk.NW).pack(side = tk.LEFT)
-        self.id = options.get('id').lower()
+        if options.get('id'): self.id = options.get('id').lower()
         self.default = options.get('default', '')
         self.setValue(self.default)
         tk.Button(self, name = self.id, anchor = 'e', textvariable = self.value, command = self.getFile ).pack(side = tk.RIGHT, fill = tk.X, expand = 1)
-        
+
     def getFile(self):
         fileName = tkFileDialog.askopenfilename()
         if fileName:
@@ -399,18 +465,18 @@ class settFile(baseWidget):
 
 class settDDList(baseWidget):
     def __init__(self, master, **options):
-        wdgName = options.pop('name').lower()
+        wdgName = options.get('name').lower()
         baseWidget.__init__(self, master, varType = 'string', name = wdgName, id = options.get('id', ''))
         self.setGUI(options)
         self.name = wdgName
 
     def setGUI(self, options):
         tk.Label(self, text = options.get('label'), width=20, anchor=tk.NW).pack(side = tk.LEFT)
-        self.id = options.get('id').lower()
+        if options.get('id'): self.id = options.get('id').lower()
         self.default = options.get('default', '')
         self.spBoxValues = options.get('values').split('|')
         self.lvalues = spBoxValues = options.get('lvalues').split('|')
-        tk.Spinbox(self, name = self.id, textvariable = self.value, values = spBoxValues).pack(side = tk.RIGHT, fill = tk.X, expand = 1)
+        tk.Spinbox(self, name = self.id, command=self.onChangeSel, textvariable = self.value, values = spBoxValues).pack(side = tk.RIGHT, fill = tk.X, expand = 1)
         self.setValue(self.default)
 
     def setValue(self, value):
@@ -427,16 +493,19 @@ class settDDList(baseWidget):
             return
         return self.spBoxValues[ndx]
 
+    def onChangeSel(self):
+        pass
+
 class settEnum(baseWidget):
     def __init__(self, master, **options):
-        wdgName = options.pop('name').lower()
+        wdgName = options.get('name').lower()
         baseWidget.__init__(self, master, varType = 'string', name = wdgName, id = options.get('id', ''))
         self.setGUI(options)
         self.name = wdgName
-        
+
     def setGUI(self, options):
         tk.Label(self, text = options.get('label'), width=20, anchor=tk.NW).pack(side = tk.LEFT)
-        self.id = options.get('id').lower()
+        if options.get('id'): self.id = options.get('id').lower()
         self.default = options.get('default', '')
         if options.has_key('values'):
             spBoxValues = options.get('values').split('|')
@@ -445,7 +514,7 @@ class settEnum(baseWidget):
         tk.Spinbox(self, name = self.id, textvariable = self.value, values = spBoxValues).pack(side = tk.RIGHT, fill = tk.X, expand = 1)
         self.setValue(self.default)
 
-        
+
     def setValue(self, value):
         nPos = value.find('|')
         self.withValues = withValues = nPos != -1
@@ -467,17 +536,17 @@ class settEnum(baseWidget):
 
 class settOptionList(baseWidget):
     def __init__(self, master, **options):
-        wdgName = options.pop('name').lower()
+        wdgName = options.get('name').lower()
         baseWidget.__init__(self, master, varType = 'string', name = wdgName, id = options.get('id', ''))
         self.setGUI(options)
         self.name = wdgName
-        
+
     def setGUI(self, options):
         settSep(self, name = 'label', type = 'lsep', label = options.get('label')).pack(side = tk.TOP, fill = tk.X)
 
-        self.id = options.get('id').lower().replace('.', '__')
+        if options.get('id'): self.id = options.get('id').lower().replace('.', '__')
         self.default = options.get('default', '')
-        
+
         uFrame = tk.Frame(self)
         uFrame.pack(side = tk.TOP, fill = tk.BOTH)
 
@@ -503,15 +572,15 @@ class settOptionList(baseWidget):
         boton.pack(side = tk.LEFT)
         boton = tk.Button(bFrame, text = 'Del', width = 15, command = self.onDel)
         boton.pack(side = tk.RIGHT)
-        
+
         self.setValue(self.default)
-        
+
     def onAdd(self):
         newLstEntry = tkSimpleDialog.askstring('Settings', 'Enter new option vith value separarated by commas')
         if newLstEntry:
             record = map(lambda x: x.strip(),newLstEntry.split(','))
             self.tree.insert('', 'end', text='', values=record)
-    
+
     def onEdit(self):
         iid = self.tree.focus()
         if iid:
@@ -528,7 +597,7 @@ class settOptionList(baseWidget):
     def onDel(self):
         iid = self.tree.focus()
         if iid: self.tree.delete(iid)
-        
+
     def setValue(self, value):
         lista = self.tree.get_children('')
         self.tree.delete(*lista)
@@ -548,17 +617,17 @@ class settOptionList(baseWidget):
             iidValStr = ','.join(iidValues)
             bDatos.append(iidValStr)
         return '|'.join(bDatos)
-        
+
 class settSlider(baseWidget):
     def __init__(self, master, **options):
-        wdgName = options.pop('name').lower()
+        wdgName = options.get('name').lower()
         baseWidget.__init__(self, master, varType = 'string', name = wdgName, id = options.get('id', ''))
         self.setGUI(options)
         self.name = wdgName
-        
+
     def setGUI(self, options):
         tk.Label(self, text = options.get('label'), width=20, anchor=tk.NW).pack(side = tk.LEFT)
-        self.id = options.get('id').lower()
+        if options.get('id'): self.id = options.get('id').lower()
         self.default = options.get('default', '')
         self.setValue(self.default)
         valRange = map(int,options.get('range').split(','))
@@ -569,14 +638,14 @@ class settSlider(baseWidget):
 
 class settNumber(baseWidget):
     def __init__(self, master, **options):
-        wdgName = options.pop('name').lower()
+        wdgName = options.get('name').lower()
         baseWidget.__init__(self, master, varType = 'string', name = wdgName, id = options.get('id', ''))
         self.setGUI(options)
         self.name = wdgName
-        
+
     def setGUI(self, options):
         tk.Label(self, text = options.get('label'), width=20, anchor=tk.NW).pack(side = tk.LEFT)
-        self.id = options.get('id').lower()
+        if options.get('id'): self.id = options.get('id').lower()
         self.default = options.get('default', '')
         # valid percent substitutions (from the Tk entry man page)
         # %d = Type of action (1=insert, 0=delete, -1 for others)
@@ -606,106 +675,145 @@ class settNumber(baseWidget):
 
 class settText(baseWidget):
     def __init__(self, master, **options):
-        wdgName = options.pop('name').lower()
-        self.name = wdgName        
+        wdgName = options.get('name').lower()
+        self.name = wdgName
         baseWidget.__init__(self, master, name = wdgName, id = options.get('id', ''))
         self.setGUI(options)
-        
+
     def setGUI(self, options):
         tk.Label(self, text = options.get('label'), width=20, anchor=tk.NW).pack(side = tk.LEFT)
-        self.id = options.get('id').lower().replace('.', '__')
         self.value = tk.StringVar()
         self.default = options.get('default', '')
         self.setValue(self.default)
-        tk.Entry(self, name = self.id, textvariable = self.value ).pack(side = tk.RIGHT, fill = tk.X, expand = 1)
-        
+        if options.get('id'):
+            self.id = options.get('id').lower().replace('.', '__')
+            tk.Entry(self, name = self.id, textvariable = self.value ).pack(side = tk.RIGHT, fill = tk.X, expand = 1)
+        else:
+            tk.Label(self, textvariable=self.value).pack(side=tk.RIGHT, fill=tk.X, expand=1)
+
+
     def setValue(self, value):
         if value == None:
             self.value.set('')
         else:
             self.value.set(value)
-        
+
     def getValue(self):
         return self.value.get() if self.value.get() != '' else ''
 
-
 class settBool(baseWidget):
     def __init__(self, master, **options):
-        wdgName = options.pop('name').lower()
-        baseWidget.__init__(self, master, varType = 'boolean', name = wdgName, id = options.get('id', ''))
+        wdgName = options.get('name').lower()
+        baseWidget.__init__(self, master, name=wdgName, id=options.get('id', ''))
+        if options.has_key('group'):
+            groupName = options['group']
+            self.value = self.form.getGroupVar(groupName)
+        else:
+            self.setVarType('boolean')
         self.setGUI(options)
         self.name = wdgName
-        
+
     def setGUI(self, options):
         tk.Label(self, text = options.get('label'), width=20, anchor=tk.NW).pack(side = tk.LEFT)
-        self.id = options.get('id').lower()
-        self.default = options.get('default')=='true'
-        self.setValue(self.default)
-        tk.Checkbutton(self, name=self.id, variable=self.value, onvalue=True, offvalue=False, anchor=tk.E).pack(side = tk.RIGHT, fill = tk.X, expand = 1)
-        
+        self.id = id = options.get('id').lower()
+        self.default = options.get('default') == 'true'
+        if options.has_key('group'):
+            value_on = id
+            if self.default: self.setValue(id)
+        else:
+            value_on = True
+            self.setValue(self.default)
+        chkbtn = tk.Checkbutton(self, name=self.id, variable=self.value, onvalue=value_on, anchor=tk.E)
+        chkbtn.pack(side = tk.RIGHT, fill = tk.X, expand = 1)
+
+    def isValueSetToDefault(self):
+        return self.getValue() == self.default
+
+    def setValue(self, value):
+        self.value.set(value)
+
+    def getValue(self):
+        value = self.value.get()
+        if isinstance(value, basestring):
+            value = (value == self.id)
+        return value
+
+class settAction(baseWidget):
+    def __init__(self, master, **options):
+        wdgName = options.get('name').lower()
+        baseWidget.__init__(self, master, name=wdgName, id=options.get('id', ''))
+        self.setGUI(options)
+        self.name = wdgName
+
+    def setGUI(self, options):
+        if options.get('id'): self.id = options.get('id').lower()
+        self.value = options.get('default')
+        tk.Button(self, name=self.id, text=options.get('label'), command=self.onClick).pack(side=tk.RIGHT, fill=tk.X,
+                                                                                            expand=1)
+
+    def onClick(self):
+        pass
+
+    def isValueSetToDefault(self):
+        return True
+
+    def setValue(self, value):
+        pass
+
+    def getValue(self):
+        return None
+
+    def setListener(self, function):
+        pass
+
+    def callListener(self, *args):
+        pass
 
 class settSep(tk.Frame):
     def __init__(self, master, **options):
-        wdgName = options.pop('name').lower().lower()
+        wdgName = options.get('name').lower().lower()
         tk.Frame.__init__(self, master, name = wdgName)
         self.pack(side = tk.TOP, fill = tk.X, expand = 1)
         self.setGUI(options)
         self.name = wdgName
-                
+
     def setGUI(self, options):
         if options.get('type', None) == 'lsep': tk.Label(self, text = options.get('label')).pack(side = tk.LEFT)
         if not options.has_key('noline'):
             color = options.get('color', 'red')
-            tk.Frame(self, relief=tk.RIDGE, height=2, bg=color).pack(side = tk.RIGHT, fill = tk.X, expand = 1)                
+            tk.Frame(self, relief=tk.RIDGE, height=2, bg=color).pack(side = tk.RIGHT, fill = tk.X, expand = 1)
 
     def getSettingPair(self):
         return (None, None)
-    
+
     def isValueSetToDefault(self):
         return True
-    
+
     def setValue(self, value):
         pass
 
     def getValue(self):
         return None
-    
+
     def setListener(self, function):
         pass
 
-
-class settAction(tk.Frame):
+class settContainer(tk.LabelFrame):
     def __init__(self, master, **options):
-        wdgName = options.pop('name').lower()
-        tk.Frame.__init__(self, master, name = wdgName, bd = 1, highlightbackground = 'black')
-        self.pack(side = tk.TOP, fill = tk.X, expand = 1)
-        self.setGUI(options)
+        wdgName = options.get('name').lower().replace('.', '_')
+        packSide = options.get('side', 'top')
+        self.side = dict(top=tk.TOP, bottom=tk.BOTTOM, left=tk.LEFT, right=tk.RIGHT).get(packSide, tk.TOP)
+        tk.LabelFrame.__init__(self, master, name=wdgName, text=options.get('label'))
+        if isinstance(master, settContainer):
+            packSide = master.side
+            self.path = master.path + '.' + wdgName
+            self.form = master.form
+        else:
+            packSide = tk.TOP
+            self.path = wdgName
+            self.form = master
+        self.pack(side=packSide, fill=tk.X, expand=1)
         self.name = wdgName
-        
-    def setGUI(self, options):
-        tk.Label(self, text = options.get('label'), width=20, anchor=tk.NW).pack(side = tk.LEFT)
-        self.id = options.get('id').lower()
-        self.value = options.get('action')
-        tk.Button(self, name = self.id, command = self.runScript).pack(side = tk.RIGHT, fill = tk.X, expand = 1)
-        
-    def runScript(self):
-        pass
-        
-    def getSettingPair(self):
-        return (self.id, self.value)
-    
-    def isValueSetToDefault(self):
-        return True
-    
-    def setValue(self, value):
-        pass
-
-    def getValue(self):
-        return None
-    
-    def setListener(self, function):
-        pass
-        
 
 class AppSettingDialog(tk.Toplevel):
     def __init__(self, master, xmlSettingFile, isFile = True, settings = None, title = None, dheight = 600, dwidth = 500):

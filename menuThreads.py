@@ -20,7 +20,7 @@ class menuThreads:
         return [self.threadDef, self.parseThreads]
     
     def setThreadData(self, threadDef, parseThreads):
-        self.threadDef = threadDef
+        self.threadDef = threadDef or 'media'
         self.counter = len(parseThreads.keys())
         if not parseThreads['rootmenu'].has_key('numid'):
             for k, key in enumerate(parseThreads):

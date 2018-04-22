@@ -327,6 +327,7 @@ def getMenuHeaderFooter(param, args, data, menus):
         opmenu = CustomRegEx.findall(opvalues, data[pIni:pFin])
         if not opmenu: continue
         tags = CustomRegEx.compile(opvalues).groupindex.keys()
+        menuUrl = []
         if 'url' in tags:
             menuUrl = [htmlUnescape(elem[tags.index('url')]) for elem in opmenu] if len(tags) > 1 else [htmlUnescape(opmenu[0].replace('\/', '/'))]
         if 'label' in tags:
