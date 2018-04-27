@@ -168,12 +168,14 @@ def kodiListBox(title, listContent, **kwargs):
 class waitWindow(tkSimpleDialog.Dialog):
 
     def __init__(self, parent, message, flagname, lock):
-        self.timer = tk.StringVar()
         self.message = tk.StringVar()
         # self.icon = icon = imgp.getFontAwesomeIcon('fa-spinner', color='black', size=100)
         # self.iconPhoto = ImageTk.PhotoImage(icon)
-
-        self.timer.set(message)
+        if isinstance(message, basestring):
+            self.timer = tk.StringVar()
+            self.timer.set(message)
+        else:
+            self.timer = message
         self.message.set('Wait ')
         self.counter = 1000
 

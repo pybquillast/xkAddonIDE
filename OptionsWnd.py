@@ -38,7 +38,8 @@ def widgetFactory(master, settings, selPane, panelModule=None, k=-1):
                        folder=settFolder,
                        filernum=settFileenum,
                        action=settAction,
-                       container=settContainer)
+                       container=settContainer,
+                       scrolledcontainer=settScrolledContainer)
 
     if not panelModule and selPane.get('lib'):
         panelModule = selPane.get('lib')
@@ -64,8 +65,10 @@ def widgetFactory(master, settings, selPane, panelModule=None, k=-1):
             widgetClass = idClass
 
         dummy = widgetClass(master, **options)
-        if wType == 'container':
-            k, deltEnableEc = widgetFactory(dummy, settings, setting, panelModule=panelModule, k=k)
+        if wType in ['container', 'scrolledcontainer']:
+            wcontainer = dummy
+            if wType == 'scrolledcontainer': wcontainer = wcontainer.innerframe
+            k, deltEnableEc = widgetFactory(wcontainer, settings, setting, panelModule=panelModule, k=k)
             enableEc += deltEnableEc
         if hasattr(dummy, 'id'):
             key = dummy.id
@@ -804,7 +807,7 @@ class settContainer(tk.LabelFrame):
         packSide = options.get('side', 'top')
         self.side = dict(top=tk.TOP, bottom=tk.BOTTOM, left=tk.LEFT, right=tk.RIGHT).get(packSide, tk.TOP)
         tk.LabelFrame.__init__(self, master, name=wdgName, text=options.get('label'))
-        if isinstance(master, settContainer):
+        if isinstance(master, settContainer) or isinstance(master, settScrolledContainer):
             packSide = master.side
             self.path = master.path + '.' + wdgName
             self.form = master.form
@@ -812,8 +815,57 @@ class settContainer(tk.LabelFrame):
             packSide = tk.TOP
             self.path = wdgName
             self.form = master
-        self.pack(side=packSide, fill=tk.X, expand=1)
+        self.pack(side=packSide, fill=tk.BOTH, expand=1)
         self.name = wdgName
+
+class settScrolledContainer(tk.LabelFrame):
+
+    def __init__(self, master, **options):
+        wdgName = options.get('name').lower().replace('.', '_')
+        packSide = options.get('side', 'top')
+        self.side = dict(top=tk.TOP, bottom=tk.BOTTOM, left=tk.LEFT, right=tk.RIGHT).get(packSide, tk.TOP)
+        tk.LabelFrame.__init__(self, master, name=wdgName, text=options.get('label'))
+        if isinstance(master, settScrolledContainer) or isinstance(master, settContainer):
+            packSide = master.side
+            self.path = master.path + '.' + wdgName
+            self.form = master.form
+        else:
+            packSide = tk.TOP
+            self.path = wdgName
+            self.form = master
+        self.pack(side=packSide, fill=tk.BOTH, expand=1)
+        self.name = wdgName
+
+        self.canvas = tk.Canvas(self, borderwidth=0, background="#ffffff")
+        self.canvas.pack(side="left", fill="both", expand=True)
+
+        self.vsb = tk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        self.vsb.pack(side="right", fill="y")
+
+        self.canvas.configure(yscrollcommand=self.vsb.set)
+
+        self.canvas.xview_moveto(2)
+        self.canvas.yview_moveto(2)
+
+        self.innerframe = settContainer(self, name="innerframe")
+        self.innerframeId = self.canvas.create_window((2, 2),
+                                                      window=self.innerframe,
+                                                      anchor="nw",
+                                                      tags="innerframe")
+
+
+        self.canvas.bind("<Configure>", self.OnCanvasConfigure)
+        self.innerframe.bind("<Configure>", self.OnInnerFrameConfigure)
+
+    def OnCanvasConfigure(self, event):
+        if self.innerframe.winfo_reqwidth() != self.canvas.winfo_width():
+            self.canvas.itemconfigure(self.innerframeId, width=self.canvas.winfo_width())
+
+    def OnInnerFrameConfigure(self, event):
+        size = (self.innerframe.winfo_reqwidth()-2, self.innerframe.winfo_reqheight()-2)
+        self.canvas.config(scrollregion="2 2 %s %s" % size)
+        if self.innerframe.winfo_reqwidth() != self.canvas.winfo_width():
+            self.canvas.config(width=self.innerframe.winfo_reqwidth())
 
 class AppSettingDialog(tk.Toplevel):
     def __init__(self, master, xmlSettingFile, isFile = True, settings = None, title = None, dheight = 600, dwidth = 500):
