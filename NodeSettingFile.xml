@@ -10,7 +10,7 @@
     <setting id="compflags" type="text" label="Compilation Flags:   " default=""/>
     <setting id="headregexp" type="text" label="Header Regexp:   " default=""/>
     <setting id="nextregexp" type="text" label="Next Regexp:   " default=""/>
-    <setting id="upmenu" type="enum" label="Send output To:   " values=""  enable="!eq(-9,'media')"/>
+    <setting id="upmenu" type="enum" label="Send output To:   " values=""  enable="!eq(-8,'media')"/>
     <setting type="lsep" label ="Icons:    "/>
 	<setting id="icondefflag" type="bool" label="Provide default icon:   " default="false"/>
 	<setting id="labeldefflag" type="bool" label="Provide default label:   " default="false"/>

@@ -1310,7 +1310,7 @@ class RegexpFrame(tk.Frame):
         frame2.pack(fill = tk.BOTH, expand = 1)
         self.txtEditor = PythonEditor(frame2.frstWidget)
         self.tree = idewidgets.TreeList(frame2.scndWidget, displaycolumns = '#all',
-                                 show = 'headings', columns = ('posINI', 'posFIN', 'var0','var1','var2','var3','var4','var5'))
+                                 show = 'headings', columns = ('posINI', 'posFIN', 'var0','var1','var2','var3','var4','var5','var6','var7','var8','var9'))
         self.tree.pack(side = tk.LEFT, fill = tk.BOTH, expand = 1)
 
         self.txtEditor.setKeyHandler(self)

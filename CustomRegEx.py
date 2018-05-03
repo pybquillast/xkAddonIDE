@@ -1008,6 +1008,9 @@ def subn(pattern, repl, string, count = 0, flags = 0):
 
 if __name__ == "__main__":
 
+    # curl "http://www.bvc.com.co/pps/tibco/portalbvc/Home/Mercados/enlinea/acciones?com.tibco.ps.pagesvc.action=portletAction&com.tibco.ps.pagesvc.targetSubscription=5d9e2b27_11de9ed172b_-74187f000001&action=buscar" --data-urlencode "tipoMercado=1" --data-urlencode "diaFecha=26" --data-urlencode "mesFecha=04" --data-urlencode "anioFecha=2018" --data-urlencode "nemo=EXITO     " -e "http://www.bvc.com.co/pps/tibco/portalbvc/Home/Mercados/enlinea/acciones" --compressed
+    tableIntradiaBody = r'(?#<table id="texto_27" .tr<td{1.*=&td1& 2.*=&td2& 3.*=&td3& 4.*=&td4& 5.*=&td5& 6.*=&td6& 7.*=&td7&}>*>)'
+
     # content = '''<form name="file" enctype="multipart/form-data" action="http://d5387.allmyvideos.net/cgi-bin/upload.cgi?upload_id=" method="post" onSubmit="return StartUpload(this);">'''
     # answ = ExtRegexParser.getAttrDict(content)
 

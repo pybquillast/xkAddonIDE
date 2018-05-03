@@ -24,6 +24,7 @@ import operator
 import importlib
 
 import StringIO
+# import xmlFileWrapper
 
 def widgetFactory(master, settings, selPane, panelModule=None, k=-1):
     widgetTypes = dict(sep=settSep, lsep=settSep,
@@ -36,7 +37,7 @@ def widgetFactory(master, settings, selPane, panelModule=None, k=-1):
                        drpdwnlst=settDDList,
                        file=settFile, audio=settFile, video=settFile, image=settFile, executable=settFile,
                        folder=settFolder,
-                       filernum=settFileenum,
+                       fileenum=settFileenum,
                        action=settAction,
                        container=settContainer,
                        scrolledcontainer=settScrolledContainer)
@@ -78,7 +79,7 @@ def widgetFactory(master, settings, selPane, panelModule=None, k=-1):
     return k, enableEc
 
 class formFrame(tk.Frame):
-    def __init__(self, master, settings, selPane, background="#ffffff"):
+    def __init__(self, master, settings, selPane, background="SystemButtonFace"):
         tk.Frame.__init__(self, master, background=background)
         self.settings = {}
         self.enEquations = {}
@@ -86,6 +87,8 @@ class formFrame(tk.Frame):
         self.widgetMapping = {}
         self.nameToId = {}
         self.radioGroups = {}
+        self.frame = frame = settContainer(self, name="frame")
+        frame.pack(side=tk.TOP, fill=tk.X, expand=tk.YES)
 
         self.populateWithSettings(settings, selPane)
 
@@ -100,20 +103,13 @@ class formFrame(tk.Frame):
             return widget
         raise AttributeError()
 
-
     def populateWithSettings(self, settings, selPane):
-        # try:
-            enableEq = widgetFactory(self, settings, selPane)[1]
-            self.nameToId = {value.rsplit('.', 1)[-1]:key for key, value in self.widgetMapping.items()}
-            self.category = selPane.get('label')
-            self.registerEc(enableEq)
-            self.setDependantWdgState()
-            self.registerChangeListeners()
-        # except Exception as e:
-        #     for child in self.winfo_children():
-        #         child.pack_forget()
-        #     message = 'FORM ERROR:\n' + str(e)
-        #     tk.Label(self, text=message, fg='#ff0000', wraplength=100).pack(expand=1, fill=tk.BOTH)
+        enableEq = widgetFactory(self.frame, settings, selPane)[1]
+        self.nameToId = {value.rsplit('.', 1)[-1]:key for key, value in self.widgetMapping.items()}
+        self.category = selPane.get('label')
+        self.registerEc(enableEq)
+        self.setDependantWdgState()
+        self.registerChangeListeners()
 
     def registerEc(self, enableEquations):
         for posWidget, enableEc in enableEquations:
@@ -159,25 +155,26 @@ class formFrame(tk.Frame):
         for key in sorted(self.enEquations.keys(), key = int):
             enableEq = self.enEquations[key]
             calcState = self.findWidgetState(enableEq)
-            theFrame = self.children[key]
+            widget = getattr(self, self.nameToId[key])
             try:
-                idKey = theFrame.id
-                theFrame.children[idKey].configure(state = calcState)
+                idKey = widget.id
+                widget.children[idKey].configure(state = calcState)
             except:
                 pass
 
     def registerChangeListeners(self):
         for key in self.dependents.keys():
-            self.children[key].setListener(self.varChange)
+            widget = getattr(self, self.nameToId[key])
+            widget.setListener(self.varChange)
 
     def varChange(self, widgetName):
-        for widget in self.dependents[widgetName]:
-            enableEq = self.enEquations[widget]
+        for depname in self.dependents[widgetName]:
+            enableEq = self.enEquations[depname]
             calcState = self.findWidgetState(enableEq)
-            theFrame = self.children[widget]
+            widget = getattr(self, self.nameToId[depname])
             try:
-                idKey = theFrame.id
-                theFrame.children[idKey].configure(state = calcState)
+                idKey = widget.id
+                widget.children[idKey].configure(state=calcState)
             except:
                 pass
 
@@ -193,17 +190,31 @@ class formFrame(tk.Frame):
     def getGroupValue(self, groupName):
         return self.radioGroups[groupName].get()
 
+    def getChangeSettings(self, settings):
+        changedSettings = dict(reset = [])
+        for child in self.getWidgets():
+            try:
+                flag = child.isValueSetToDefault()
+            except:
+                pass
+            else:
+                key, value = child.getSettingPair()
+                if not flag:
+                    changedSettings[key] = value
+                elif key and settings.has_key(key):
+                    changedSettings['reset'].append(key)
+        filterFlag = lambda key: (not settings.has_key(key) or settings[key] != changedSettings[key])
+        toProcess = dict([(key, value) for key, value in changedSettings.items() if filterFlag(key)])
+        return toProcess
+
 class scrolledFrame(tk.Frame):
     def __init__(self, master, settings, selPane):
         self.initDescenAscend()
         tk.Frame.__init__(self, master)
         self.pack(side = tk.TOP, fill = tk.BOTH, expand = 1)
-        self.canvas = tk.Canvas(self, borderwidth=0, background="#ffffff")
-        # self.frame = tk.Frame(self.canvas, background="#ffffff")
-        # self.frame.pack()
-        # self.populateWithSettings(settings, selPane)
+        self.canvas = tk.Canvas(self, borderwidth=0, background="SystemButtonFace")
         self.category = selPane.get('label')
-        self.frame = formFrame(self.canvas, settings, selPane, background="#ffffff")
+        self.frame = formFrame(self.canvas, settings, selPane, background="SystemButtonFace")
         self.frame.pack()
 
         self.vsb = tk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
@@ -264,8 +275,6 @@ class scrolledFrame(tk.Frame):
         allwidgets.sort(key = keyfunc)
         return [widget.getSettingPair(tId = True) for widget in allwidgets]
 
-
-
 class baseWidget(tk.Frame):
     def __init__(self, master, **options):
         self._id = options.pop('id')
@@ -275,7 +284,7 @@ class baseWidget(tk.Frame):
         baseConf = dict(name=wdgName, bd=1, highlightbackground='dark grey', highlightthickness=2,
                         highlightcolor='green', takefocus=1)
         baseConf.update(options)
-        if isinstance(master, settContainer):
+        if isinstance(master, settContainer) or isinstance(master, settScrolledContainer):
             self.path = master.path + '.' + baseConf.get('name', '')
             self.form = master.form
         else:
@@ -540,6 +549,7 @@ class settEnum(baseWidget):
 class settOptionList(baseWidget):
     def __init__(self, master, **options):
         wdgName = options.get('name').lower()
+        self.isTree = options.get('tree', 'false') == 'true'
         baseWidget.__init__(self, master, varType = 'string', name = wdgName, id = options.get('id', ''))
         self.setGUI(options)
         self.name = wdgName
@@ -557,8 +567,12 @@ class settOptionList(baseWidget):
         sbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         colHeadings = options.get('columnsheadings')
-        columnsId = map(lambda x: x.strip(),colHeadings.split(','))
-        tree = ttk.Treeview(uFrame, show = 'headings', columns = columnsId, displaycolumns = columnsId)
+        dshow = 'headings'
+        columnsId = dcolumns = map(lambda x: x.strip(),colHeadings.split(','))
+        if self.isTree:
+            dshow = 'tree ' + dshow
+            dcolumns = '#all'
+        tree = ttk.Treeview(uFrame, show=dshow, columns = columnsId, displaycolumns = dcolumns)
         tree.pack(side=tk.LEFT, fill=tk.BOTH, expand = 1)
         sbar.config(command=tree.yview)                    # xlink sbar and tree
         tree.config(yscrollcommand=sbar.set)               # move one moves other
@@ -578,23 +592,62 @@ class settOptionList(baseWidget):
 
         self.setValue(self.default)
 
+    def xmlDlgWindow(self, tupleSett, isEdit=False, isTree=False):
+        header = """<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <category label="TCombobox">
+"""
+        footer = """    </category>
+</settings>
+"""
+        outStr = header
+        if not isEdit and isTree:
+            deltaStr = '<setting id="{0}" type="text" label="Parent Element" default="{1}" enable="false"/>\n'
+            outStr += 8 * ' ' + deltaStr.format(*tupleSett[0])
+            deltaStr = '<setting id="{0}" type="text" label="Element Name" default="{1}" />\n'
+            outStr += 8 * ' ' + deltaStr.format(*tupleSett[1])
+            tupleSett = tupleSett[2:]
+
+        templateStr = '<setting id="{0}" type="text" label="{0}" default=""/>\n'
+        if isEdit:
+            templateStr = '<setting id="{0}" type="text" label="{0}" default="{1}"/>\n'
+        for x, y in tupleSett:
+            deltaStr = templateStr.format(x, y)
+            outStr += 8*' ' + deltaStr
+        outStr += footer
+        return outStr
+
     def onAdd(self):
-        newLstEntry = tkSimpleDialog.askstring('Settings', 'Enter new option vith value separarated by commas')
-        if newLstEntry:
-            record = map(lambda x: x.strip(),newLstEntry.split(','))
-            self.tree.insert('', 'end', text='', values=record)
+        parent = self.tree.focus()
+        pair = [(col, col) for col in self.columnsId]
+        if self.isTree:
+            pair = [('parent', self.tree.item(parent, 'text')), ('text', '')] + pair
+        xmlDlg = self.xmlDlgWindow(pair,isEdit=False, isTree=self.isTree)
+        dlg = TreeDialog(self, title='Add', xmlFile=xmlDlg, isFile=False)
+        if dlg.allSettings:
+            result = dict(dlg.allSettings)
+            columnsId = self.columnsId
+            if self.isTree:
+                columnsId = ['text'] + columnsId
+            record = [result[col].strip() for col in columnsId]
+            parent, iid, text = parent, None, ''
+            if self.isTree:
+                text = record[0]
+                record = record[1:]
+            self.tree.insert(parent, 'end', iid=iid, text=text, values=record, open=True)
 
     def onEdit(self):
         iid = self.tree.focus()
         if iid:
-            iidValues = []
-            for col in self.columnsId:
-                iidValues.append(self.tree.set(iid, col))
-            iidValStr = ','.join(iidValues)
-            newLstEntry = tkSimpleDialog.askstring('Edit', 'Edit record', initialvalue = iidValStr)
-            if newLstEntry and iidValStr != newLstEntry:
-                record = map(lambda x: x.strip(),newLstEntry.split(','))
-                for k, col in enumerate(self.columnsId):
+            value = self.tree.set
+            columnsId = self.columnsId
+            pair = [(col, value(iid, col)) for col in columnsId]
+            xmlDlg = self.xmlDlgWindow(pair, isEdit=True)
+            dlg = TreeDialog(self, title='Edit', xmlFile=xmlDlg, isFile=False)
+            if dlg.allSettings:
+                result = dict(dlg.allSettings)
+                record = [result[col].strip() for col in columnsId]
+                for k, col in enumerate(columnsId):
                     self.tree.set(iid, col, record[k])
 
     def onDel(self):
@@ -606,19 +659,29 @@ class settOptionList(baseWidget):
         self.tree.delete(*lista)
         if value == '':return
         maxCol = len(self.columnsId) - 1
+        if self.isTree: maxCol += 3
         bDatos = [map(lambda x: x.strip(),record.split(',', maxCol)) for record in value.split('|')]
+        parent, iid, text = '', None, ''
         for record in bDatos:
-            self.tree.insert('', 'end', text='', values=record)
+            if self.isTree:
+                parent, iid, text = record[:3]
+                record = record[3:]
+            self.tree.insert(parent, 'end', iid=iid, text=text, values=record, open=True)
 
     def getValue(self):
-        lista = self.tree.get_children('')
+        stack = list(self.tree.get_children('')[::-1])
         bDatos = []
-        for iid in lista:
+        while stack:
+            iid = stack.pop()
             iidValues = []
-            for col in self.columnsId:
-                iidValues.append(self.tree.set(iid, col))
+            if self.isTree:
+                iidValues = [self.tree.parent(iid),iid, self.tree.item(iid, 'text')]
+            iidValues = iidValues + list(self.tree.item(iid, 'values'))
             iidValStr = ','.join(iidValues)
             bDatos.append(iidValStr)
+            children = self.tree.get_children(iid)
+            if children:
+                stack.extend(list(children)[::-1])
         return '|'.join(bDatos)
 
 class settSlider(baseWidget):
@@ -674,7 +737,6 @@ class settNumber(baseWidget):
         self.entry.delete(0, tk.END)
         self.entry.insert(0, value)
         pass
-
 
 class settText(baseWidget):
     def __init__(self, master, **options):
@@ -806,16 +868,19 @@ class settContainer(tk.LabelFrame):
         wdgName = options.get('name').lower().replace('.', '_')
         packSide = options.get('side', 'top')
         self.side = dict(top=tk.TOP, bottom=tk.BOTTOM, left=tk.LEFT, right=tk.RIGHT).get(packSide, tk.TOP)
-        tk.LabelFrame.__init__(self, master, name=wdgName, text=options.get('label'))
+        id = options.get('id', wdgName).lower()
+        if id != wdgName:
+            self.id = id
+        tk.LabelFrame.__init__(self, master, name=id, text=options.get('label'))
         if isinstance(master, settContainer) or isinstance(master, settScrolledContainer):
             packSide = master.side
-            self.path = master.path + '.' + wdgName
+            self.path = master.path + '.' + id
             self.form = master.form
         else:
             packSide = tk.TOP
-            self.path = wdgName
+            self.path = id
             self.form = master
-        self.pack(side=packSide, fill=tk.BOTH, expand=1)
+        self.pack(side=packSide, fill=tk.X, expand=1)
         self.name = wdgName
 
 class settScrolledContainer(tk.LabelFrame):
@@ -824,31 +889,35 @@ class settScrolledContainer(tk.LabelFrame):
         wdgName = options.get('name').lower().replace('.', '_')
         packSide = options.get('side', 'top')
         self.side = dict(top=tk.TOP, bottom=tk.BOTTOM, left=tk.LEFT, right=tk.RIGHT).get(packSide, tk.TOP)
-        tk.LabelFrame.__init__(self, master, name=wdgName, text=options.get('label'))
+        id = options.get('id', wdgName).lower()
+        if id != wdgName:
+            self.id = id
+        tk.LabelFrame.__init__(self, master, name=id, text=options.get('label'))
         if isinstance(master, settScrolledContainer) or isinstance(master, settContainer):
             packSide = master.side
-            self.path = master.path + '.' + wdgName
+            self.path = master.path + '.' + id
             self.form = master.form
         else:
             packSide = tk.TOP
-            self.path = wdgName
+            self.path = id
             self.form = master
-        self.pack(side=packSide, fill=tk.BOTH, expand=1)
+        self.pack(side=packSide, fill=tk.X, expand=1)
         self.name = wdgName
 
-        self.canvas = tk.Canvas(self, borderwidth=0, background="#ffffff")
-        self.canvas.pack(side="left", fill="both", expand=True)
-
-        self.vsb = tk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        self.vsb = tk.Scrollbar(self, orient="vertical", )
         self.vsb.pack(side="right", fill="y")
 
-        self.canvas.configure(yscrollcommand=self.vsb.set)
+        self.canvas = tk.Canvas(self, name="canvas", borderwidth=0, background="SystemButtonFace")
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=tk.YES)
 
-        self.canvas.xview_moveto(2)
-        self.canvas.yview_moveto(2)
+        self.canvas.configure(yscrollcommand=self.vsb.set)
+        self.vsb.configure(command=self.canvas.yview)
+
+        self.canvas.xview_moveto(0)
+        self.canvas.yview_moveto(0)
 
         self.innerframe = settContainer(self, name="innerframe")
-        self.innerframeId = self.canvas.create_window((2, 2),
+        self.innerframeId = self.canvas.create_window((0, 0),
                                                       window=self.innerframe,
                                                       anchor="nw",
                                                       tags="innerframe")
@@ -862,21 +931,26 @@ class settScrolledContainer(tk.LabelFrame):
             self.canvas.itemconfigure(self.innerframeId, width=self.canvas.winfo_width())
 
     def OnInnerFrameConfigure(self, event):
-        size = (self.innerframe.winfo_reqwidth()-2, self.innerframe.winfo_reqheight()-2)
-        self.canvas.config(scrollregion="2 2 %s %s" % size)
+        size = (self.innerframe.winfo_reqwidth(), self.innerframe.winfo_reqheight())
+        self.canvas.config(scrollregion="0 0 %s %s" % size)
         if self.innerframe.winfo_reqwidth() != self.canvas.winfo_width():
-            self.canvas.config(width=self.innerframe.winfo_reqwidth())
+            width = self.innerframe.winfo_reqwidth()
+            self.canvas.config(width=width)
 
 class AppSettingDialog(tk.Toplevel):
-    def __init__(self, master, xmlSettingFile, isFile = True, settings = None, title = None, dheight = 600, dwidth = 500):
+    def __init__(self, master, xmlSettingFile, isFile = True, settings = None, title = None, dheight = None, dwidth = None):
         tk.Toplevel.__init__(self, master)
         self.resizable(False, False)
         self.transient(master)
         if title: self.title(title)
         self.parent = master
-        body = tk.Frame(self, height = dheight, width = dwidth, bg = 'grey')
+        body = tk.Frame(self, bg = 'grey')
+        if dheight:
+            body.configure(height=dheight)
+        if dwidth:
+            body.configure(width=dwidth)
         body.pack(padx=5, pady=5)
-        body.pack_propagate(0)
+        # body.pack_propagate(0)
         self.flag = 0
         self.settings = settings or {}
         self.allSettings = None
@@ -903,20 +977,22 @@ class AppSettingDialog(tk.Toplevel):
         self.destroy()
 
     def setGUI(self, master):
-        topPane = tk.Frame(master, height = 500, width = 500)
+        topPane = tk.Frame(master)
         topPane.pack(side = tk.TOP, fill = tk.BOTH, expand = 1)
         topPane.grid_propagate(0)
         self.topPane = topPane
-        self.setFrameFromXML()
-        self.rightPane = None
-        self.selOption(0)
-        self.rightPane.pack(side = tk.TOP, fill = tk.BOTH)
+
         bottomPane = tk.Frame(master, relief = tk.RIDGE, bd = 5, bg = 'white', padx = 3, pady = 3)
         bottomPane.pack(side = tk.TOP, fill = tk.X)
         for label in ['Apply', 'Cancel']:
             boton = tk.Button(bottomPane, name = label.lower() , text = label, command = partial(self.onAction, label))
             boton.pack(side = tk.RIGHT)
-            
+
+        self.setFrameFromXML()
+        self.rightPane = None
+        self.selOption(0)
+        self.rightPane.pack(side = tk.TOP, fill = tk.BOTH)
+
         return bottomPane.children['apply']
         
     def onAction(self, action):
@@ -956,7 +1032,70 @@ class AppSettingDialog(tk.Toplevel):
         selPane = self.root.findall('category')[ene]
         self.rightPane = scrolledFrame(self.topPane, self.settings, selPane)
         self.rightPane.pack(side = tk.TOP, fill = tk.BOTH)
- 
+
+class TreeDialog(tkSimpleDialog.Dialog):
+    def __init__(self, master, title=None, xmlFile=None, isFile=False, settings=None):
+        import xmlFileWrapper
+        self.settings = settings = settings or {}
+        self.ads = xmlFileWrapper.xmlFileWrapper(xmlFile, isFile=isFile, nonDefaultValues=settings)
+        tkSimpleDialog.Dialog.__init__(self, master, title)
+
+    def body(self, master):
+        '''create dialog body.
+
+        return widget that should have initial focus.
+        This method should be overridden, and is called
+        by the __init__ method.
+        '''
+        selPanel = self.ads.getActivePane()
+        self.form = form = formFrame(master, {}, selPanel)
+        form.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
+        wdgId = sorted(form.nameToId.keys(), key=int)[0]
+        wdgId = form.nameToId[wdgId]
+        widget = getattr(self.form, wdgId)
+        return widget
+
+    def buttonbox(self):
+        '''add standard button box.
+
+        override if you do not want the standard buttons
+        '''
+
+        box = tk.Frame(self)
+
+        w = tk.Button(box, text="OK", width=10, command=self.ok, default=tk.ACTIVE)
+        w.pack(side=tk.LEFT, padx=5, pady=5)
+        w = tk.Button(box, text="Cancel", width=10, command=self.cancel)
+        w.pack(side=tk.LEFT, padx=5, pady=5)
+
+        self.bind("<Return>", self.ok)
+        self.bind("<Escape>", self.cancel)
+
+        box.pack()
+
+    def ok(self, event=None):
+        settings = self.settings
+        changedSettings = self.form.getChangeSettings(settings)
+        reset = changedSettings.pop('reset')
+        for key in reset: settings.pop(key)
+        settings.update(changedSettings)
+        self.result = dict(settings)
+        allwidgets = self.form.getWidgets()
+        allwidgets.sort(key=operator.attrgetter('id'))
+        allSettings = [widget.getSettingPair(tId=True) for widget in allwidgets]
+
+        self.allSettings = allSettings
+        self.cancel()
+        pass
+
+    def geometry(self, posStr):
+        width, height = 290, 220
+        posx = (self.winfo_screenwidth() - width) / 2
+        posy = (self.winfo_screenheight() - height) / 2
+        posStr = "+%d+%d" % (posx, posy)
+        tkSimpleDialog.Dialog.geometry(self, posStr)
+
+
 def builtAddonXmlFile(noDefaultSettings):
     root = ET.fromstring(adonxmldesc)
     addonXml = processTemplate(root)
@@ -1183,17 +1322,58 @@ xmlWidgetsAvailable = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
   </category>
 </settings>
 """
+textoencius = """<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<settings>
+    <category label="TCombobox">
+        <setting id="Description" type="text" label="Description" default=""/>
+        <setting id="Version" type="text" label="Version" default=""/>
+        <setting id="Optional" type="text" label="Optional" default=""/>
+    </category>
+</settings>
+"""
+xmlOnePanel = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<settings>
+  <category label="Widgets types">
+    <setting type="scrolledcontainer" label ="Panel">
+        <setting type="sep" label ="Type sep:    "/>
+        <setting type="lsep" label ="Type lsep:    "/>
+        <setting id="addon_text" type="text" label="Type text:   " default="xbmcIDEdefault"/>
+        <setting id="addon_optionlst" type="optionlst" default="xbmc.python,2.1.0,|script.module.urlresolver,2.4.0," label="Type optionlst" columnsheadings = "Description, Version, Optional" />
+        <setting id="addon_number" type="number" label ="type number" default="5"/>
+        <setting id="addon_ipaddress" type="ipaddress" label ="type ipaddress" default="134"/>
+        <setting id="addon_slider" type="slider" label ="type slider" range="10,50" default="20"/>
+        <setting id="addon_bool" type="bool" label ="type bool" default="true"/>
+        <setting id="addon_enum" type="enum" label="Type enum :   " default="5" values="0|1|2|3|4|5|6|7|8|9|10"/>
+        <setting id="addon_labelenum" type="labelenum" label="Type labelenum :   " default="label2" lvalues="label0|label1|label2|label3|label4"/>
+        <setting id="addon_dropdown" type="drpdwnlst" label="Type drpdwnlst :   " lvalues="label0|label1|label2|label3|label4" values="int0|int1|int2|int3|int4" default="int3"/>
+        <setting id="addon_file" type="file" label="Type file:   " default=""/>
+        <setting id="addon_audio" type="audio" label="Type audio:   " default=""/>
+        <setting id="addon_video" type="video" label="Type video:   " default=""/>
+        <setting id="addon_image" type="image" label="Type image:   " default=""/>
+        <setting id="addon_executable" type="executable" label="Type executable:   " default=""/>
+        <setting id="script_export" type="folder" label="Type Folder:   " default="c:/basura"/>
+        <setting id="addon_fileenum" type="fileenum" label="Type fileenum:   " values="" mask ="*.py" hideext='false' default=""/>
+        <setting id="addon_action" type="action" label="Type action:   " default=""/>
+    </setting>
+  </category>
+</settings>
+"""
 
 #    
 
     
 if __name__ == "__main__":
-    fileObject = StringIO.StringIO(xmlWidgetsAvailable)
-    Root = tk.Tk()
 
-    Root.title('PRINCIPAL')
-    theSettings = AppSettingDialog(Root, fileObject, title = 'Test Window Case')
-    print theSettings.result
+
+    fileObject = StringIO.StringIO(xmlOnePanel)
+    Root = tk.Tk()
+    Root.withdraw()
+    test = TreeDialog(Root, 'Prueba Dialog', textoencius, isFile=False)
+    Root.wait_window(test)
+
+
+    # theSettings = AppSettingDialog(Root, xmlOnePanel, isFile = False, title = 'Test Window Case')
+    # print theSettings.result
 #     totalSettings = getScriptSettings(xmlSettingFile, theSettings.result)
 #     strFiles = {}
 #     strFiles['addon.xml'] = getAddonXmlFile(xmlAddonFile, totalSettings)
@@ -1211,8 +1391,8 @@ if __name__ == "__main__":
 
     # lista = myScrolledList(Root)
     # lista.pack()
-        
-    Root.mainloop()
+
+    # Root.mainloop()
 
 
 
