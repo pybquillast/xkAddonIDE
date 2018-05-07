@@ -111,6 +111,15 @@ class formFrame(tk.Frame):
         self.setDependantWdgState()
         self.registerChangeListeners()
 
+    def setChangeSettings(self, settings):
+        form = self
+        mapping = [key for key in self.widgetMapping.keys()
+                   if hasattr(getattr(form, key), 'setValue')]
+        toModify = set(settings.keys()).intersection(mapping)
+        map(lambda w: w.setValue(settings[w.id]), self.getWidgets(toModify))
+        toReset = set(mapping).difference(toModify)
+        map(lambda w: w.setValue(w.default), self.getWidgets(toReset))
+
     def registerEc(self, enableEquations):
         for posWidget, enableEc in enableEquations:
             enableEc = self.getAbsEcuation(posWidget, enableEc)
@@ -181,8 +190,9 @@ class formFrame(tk.Frame):
     def registerWidget(self, wdId, wdPath):
         self.widgetMapping[wdId] = wdPath
 
-    def getWidgets(self):
-        return [getattr(self, key) for key in self.widgetMapping.keys()]
+    def getWidgets(self, widgetsIds=None):
+        widgetsIds = widgetsIds or self.widgetMapping.keys()
+        return [getattr(self, key) for key in widgetsIds]
 
     def getGroupVar(self, groupName):
         return self.radioGroups.setdefault(groupName, tk.StringVar())
