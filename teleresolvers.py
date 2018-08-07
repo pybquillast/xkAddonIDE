@@ -13,9 +13,8 @@ def hostAndMediaId(videoUrl):
         host, media_id = videoUrl
     else:
         raise Exception('Invalid videoUrl, You must supply a videoUrl or a pair of (host, media_id)')
-    pattern = r'embed-(?P<key>.+?)-\d{3}x\d{3}'
-    m = re.match(pattern, media_id)
-    if m: media_id = m.group('key')
+    media_id = media_id.replace('embed-', '')
+    media_id = re.sub(r'-[0-9]{3}x[0-9]{3}', '', media_id)
     return (host, media_id)
 
 def getMediaUrl(videoUrl):
@@ -80,7 +79,8 @@ def vidzi(videoId, headers = None):
     headers = headers or {}
     headers['User-Agent'] = DESKTOP_BROWSER
     headers['Upgrade-Insecure-Requests'] = 1
-    return jwplayerFamilyResolver('vidzi.tv', videoId, headers, hasForm=False, isPacked=True)
+    videoId = videoId + '.html'
+    return jwplayerFamilyResolver('vidzi.tv', videoId, headers, hasForm=False, isPacked=False)
 
 def vodlock(videoId, headers=None):
     return jwplayerFamilyResolver('vodlock.co', videoId, headers, wait=3)
@@ -272,8 +272,10 @@ def playFamilyResolver(domain, videoId, wait, headers=None, **reqattr):
     except:
         raise Exception('Resolver %s: No puzzle detected' % domain)
     puzzle = unpack(puzzle)
-    videourl = getJwpSource(puzzle, sourcesLabel='sources', orderBy='label')
-    videourl = re.sub(r'[0-9a-z]{40,}', lambda x: (x.group()[:-4]+x.group()[-3:])[::-1], videourl)
+    pattern = r'sources[:=]\s*(\[[^\]]+\])'
+    m = re.search(pattern, puzzle)
+    sources = eval(m.group(1))
+    videourl = sources[-1]
     headers = {'User-Agent':DESKTOP_BROWSER, 'Referer':url}
     urlStr = '%s|%s' % (videourl,urllib.urlencode(headers))
     return urlStr

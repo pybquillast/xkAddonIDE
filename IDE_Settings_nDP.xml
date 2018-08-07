@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings>
-    <setting id="var_fileHistory" value="["E:/Alex Montes/Documents/xkAddonIDEdata/new_project_free_tv.pck", "E:/Alex Montes/Documents/xkAddonIDEdata/meta_project_free_tv.pck", "E:/Alex Montes/Documents/xkAddonIDEdata/NovelasHDgratisIDE.pck"]" />
-    <setting id="appdir_importer" value="E:/Alex Montes/git/KodiStubs/KodiImporter" />
+    <setting id="var_fileHistory" value="["/media/amontesb/HITACHI/Alex Montes/Documents/xkAddonIDEdata/SrAvila.pck", "/media/amontesb/HITACHI/Alex Montes/Documents/xkAddonIDEdata/CssaDePapel.pck", "/media/amontesb/HITACHI/Alex Montes/Documents/xkAddonIDEdata/NovelasHDgratisIDE.pck"]" />
+    <setting id="appdir_importer" value="/media/amontesb/HITACHI/Alex Montes/PycharmProjects/KodiAddonIDE/KodiStubs/KodiImporter" />
     <setting id="host_repository" value="000webhost,False,files.000webhost.com,kodiaddonidenet,alexmontesbarrios62,/public_html/|test2,True,dummy.host.com,testuser,,/publicamente/" />
-    <setting id="appdir_data" value="E:/Alex Montes/Documents/xkAddonIDEdata" />
+    <setting id="appdir_data" value="/media/amontesb/HITACHI/Alex Montes/Documents/xkAddonIDEdata" />
 </settings>

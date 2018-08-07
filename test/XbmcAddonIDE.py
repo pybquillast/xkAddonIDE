@@ -66,7 +66,7 @@ class XbmcAddonIDE(tk.Toplevel):
         self.setGUI()
         self.newFile()
         self.state("zoomed")
-        self.iconbitmap(os.path.abspath(r'.\images\KodiIDE_icon.ico'))
+        self.iconbitmap(os.path.abspath(r'./images/KodiIDE_icon.ico'))
         
     def checkSaveFlag(self):
         fileName = self.title()
@@ -1376,7 +1376,7 @@ if __name__ == "__main__":
         tkMessageBox.showinfo('Kode IDE Info', 'KodiImporter not located')
     else:
         if bflag: ideSettings.save()
-        with SplashScreen(Root, os.path.abspath(r'.\images\KodiIDE_logo.jpg'), 5.0 ):
+        with SplashScreen(Root, os.path.abspath(r'./images/KodiIDE_logo.jpg'), 5.0 ):
             mainWin = XbmcAddonIDE()
         Root.wait_window(mainWin)
 

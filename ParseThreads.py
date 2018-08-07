@@ -310,7 +310,7 @@ class RegexpBar(tk.Frame):
 
         self.textWidget.see(selTag[1])
         self.textWidget.see(selTag[0])
-        self.matchLabel.config(text=matchStr, bg = 'SystemButtonFace')
+        self.matchLabel.config(text=matchStr)
 
         self.actMatch(nPos)
 
@@ -413,7 +413,7 @@ class RegexpBar(tk.Frame):
 
         yesCompFlag = len(regexPattern) > 0
         if not yesCompFlag:
-            matchLabel.config(text = '', bg = 'SystemButtonFace')
+            matchLabel.config(text = '')
             return None
         self.entry.configure(style='red.TCombobox')
         try:
@@ -481,7 +481,7 @@ class RegexpBar(tk.Frame):
             self.textWidget.tag_remove(match, tagIni, tagFin)
         for button in [self.leftWing, self.rightWing]:
             button.pack_forget()
-        self.matchLabel.config(text='', bg = 'SystemButtonFace')
+        self.matchLabel.config(text='')
         items = self.tree.get_children()
         self.tree.delete(*items)
         map(self.textWidget.mark_unset, items)
@@ -542,7 +542,7 @@ class RegexpBar(tk.Frame):
                     self.matchLabel.update()
                     continue
                 self.actMatchIndx = 1
-                self.matchLabel.config(text = ' 1 ', bg = 'SystemButtonFace')
+                self.matchLabel.config(text = ' 1 ')
                 self.setTag('actMatch', baseIndex, match, 0)
                 self.textWidget.tag_delete('sel')
                 btState = tk.NORMAL
@@ -587,7 +587,7 @@ class NavigationBar(tk.Frame):
         tk.Frame.__init__(self, master)
         self.urlContent = None
         self.mutex = thread.allocate_lock()
-        self.activeUrl = tk.StringVar()
+        self.activeUrl = tk.StringVar(master)
         self.upHistory = []
         self.downHistory = []
         self.cookies={}
@@ -622,40 +622,6 @@ class NavigationBar(tk.Frame):
         entryUrl.bind('<Control-o>', self.controlleftKey)
 
     def settingComm(self):
-#         msg = '<?xml version="1.0" encoding="utf-8" standalone="yes"?>\n<settings>'
-#         msg += '<category label="General">\n'
-#         msg += '<setting type="lsep" label ="%s" color="red"/>\n' % 'General'
-#
-#         genHdr = self.genHdr
-#         for key, value in genHdr:
-#             msg += '''<setting type="lsep" label ='%s' noline="1"/>\n''' % (key.ljust(25) + ': ' + value)
-#
-#         msg += '<setting type="lsep" label ="%s" color="green"/>\n' % 'Response Headers'
-#         rspHdr = self.rspHdr
-#         for key, value in sorted(rspHdr):
-#             msg += '''<setting type="lsep" label ='%s' noline="1"/>\n''' % (key.ljust(25) + ': ' + value)
-#
-#         msg += '<setting type="lsep" label ="%s" color="blue"/>\n' % 'Request Headers'
-#         reqHdr = self.reqHdr
-#         for key, value in sorted(reqHdr):
-#             msg += '''<setting type="lsep" label ='%s' noline="1"/>\n''' % (key.ljust(25) + ': ' + value)
-#
-#         msg += '</category>\n'
-#         msg += '<category label="Headers">\n'
-#         reqHdr = '|'.join(map(','.join, self.DEF_REQUEST_HEADERS))
-#         msg += '''<setting id="req_headers" type="optionlst" default='%s' label="Request headers to use" columnsheadings = "Header, Value" />\n''' % reqHdr
-#         msg += '</category>\n'
-#         msg += '</settings>\n'
-
-#         browserParam = {}
-#         if self.request_headers: browserParam['req_headers'] = '|'.join(map(','.join, self.request_headers))
-#         browser = AppSettingDialog(self, msg, isFile = False, settings = browserParam, title = 'Browser config params', dheight = 600, dwidth = 800)
-#         browserParam = browser.result
-#         if 'req_headers' in browserParam:
-#             self.request_headers = [map(lambda x: x.strip(),record.split(',', 1)) for record in browserParam['req_headers'].split('|')]
-#         else:
-#             self.request_headers = []
-
         browser = AppSettingDialog(self, 'browserSettings.xml', settings = self.browserParam, title = 'Browser config params')
         bp = browser.result
         self.browserParam = bp
@@ -751,6 +717,8 @@ class NavigationBar(tk.Frame):
             self.labelUrl.config(text = colorPalette[indx])
             self.labelUrl.after(100, self.colorAnimation)
         else:
+            resp_url, self.urlContent = self.urlContent
+            self.activeUrl.set(resp_url)
             self.settings['state'] = tk.NORMAL
             if isinstance(self.urlContent, Exception):
                 tkMessageBox.showerror('Error', self.urlContent)
@@ -786,11 +754,9 @@ class NavigationBar(tk.Frame):
             for match in re.finditer("\$\.cookie\('([^']+)',\s*'([^']+)",data):
                 key,value = match.groups()
                 self.cookies[key]=value
-#             self.cookies["url_referer"] = self.values.url
         with mutex:
             resp_url = self.unNormUrl(resp_url)
-            self.activeUrl.set(resp_url)
-            self.urlContent = data
+            self.urlContent = (resp_url, data)
 
     def openUrl(self, urlToOpen):
         """

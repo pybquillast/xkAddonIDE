@@ -17,7 +17,7 @@ import urllib
 import time
 import operator as op
 
-MOBILE_BROWSER = "Mozilla/5.0 (Linux; U; Android 4.0.3; ko-kr; LG-L160L Build/IML74K) AppleWebkit/534.30 (KHTML, like Gecko) Version/4.0 Mobile Safari/534.30"
+MOBILE_BROWSER = "Mozilla/5.0 (Linux; U; android 4.0.3; ko-kr; LG-L160L Build/IML74K) AppleWebkit/534.30 (KHTML, like Gecko) Version/4.0 Mobile Safari/534.30"
 DESKTOP_BROWSER = "Mozilla/5.0 (Windows NT 6.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.80 Safari/537.36"
 
 html_escape_table = {
@@ -123,18 +123,20 @@ def getJwpSource(content, sourcesLabel='sources', orderBy=None):
     pattern = r'(?<=:).+?(?=[,}])'     # dictionary values
     def normValue(x):
         answ = x.group()
-        if x.group().startswith('"'): return answ
+        if answ.strip().startswith('"'): return answ
         answ = answ.replace('"', '\\"')
         return '"%s"' % answ
     sources = re.sub(pattern, normValue, sources)
 
-    # for pattern in [r'(?<=[{,])[a-z]+(?=:)', r'(?<=:)[a-z]\w*(?=[,)])']:
-    #     sources = re.sub(pattern, lambda x: '"%s"'%x.group(), sources)
     sources = json.loads(sources)
-    if orderBy:
-        sources = sorted(sources, key=lambda x: x.get(orderBy, -1))
-    key = set(['file', 'src']).intersection(sources[-1]).pop()
-    return sources[-1][key]
+    if isinstance(sources[0], dict):
+        if orderBy:
+            sources = sorted(sources, key=lambda x: x.get(orderBy, -1))
+        key = set(['file', 'src']).intersection(sources[-1]).pop()
+        source = sources[-1][key]
+    else:
+        source = sources[-1]
+    return source
 
 
 def fromJscriptToPython(strvar):

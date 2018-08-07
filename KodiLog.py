@@ -12,6 +12,9 @@ import tkMessageBox
 import HTMLParser
 import urllib
 import re
+
+import certifi
+
 import CustomRegEx
 import os
 import SintaxEditor
@@ -83,7 +86,7 @@ class kodiLog(tk.Frame):
         self.sintaxEd.setHyperlinkManager(hyperLinkManager)
 
     def getLogContent(self, logUrl):
-        f = urllib.urlopen(logUrl)
+        f = urllib.urlopen(logUrl, cafile=certifi.where())
         content = f.read().decode('utf-8')
         f.close()
         return content
@@ -137,7 +140,10 @@ class kodiLog(tk.Frame):
         from xbmc import translatePath
         key = self.sintaxEd.getContent()[2]
         logfile = os.path.join(translatePath('special://logpath'), 'kodi.log')
-        modtime = os.path.getmtime(logfile)
+        try:
+            modtime = os.path.getmtime(logfile)
+        except OSError:
+            return
         newkey = '%s_%s' % (logfile, modtime)
 
         if refreshFlag and key != newkey:

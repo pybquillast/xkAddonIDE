@@ -21,6 +21,7 @@ import httplib
 import socket
 import xml.etree.ElementTree as ET
 
+import certifi
 
 import FileGenerator
 import KodiScriptImporter as ksi
@@ -142,7 +143,7 @@ def application (environ, start_response, server=None):
         if environ['REQUEST_METHOD'] == 'POST':
             data = environ['wsgi_input'].read()
         req = urllib2.Request(url, data, headers)
-        response = urllib2.urlopen(req)
+        response = urllib2.urlopen(req, cafile=certifi.where())
         rcode = response.getcode()
         status = str(rcode) + ' ' + httplib.responses[rcode]
         response_headers = filter(lambda x: not is_hop_by_hop(x[0]), response.headers.items())

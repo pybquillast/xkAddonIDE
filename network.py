@@ -24,8 +24,11 @@ import gzip
 import zlib
 from urllib import urlencode
 # from _pytest.config import Parser
+import ssl
 
-MOBILE_BROWSER = "Mozilla/5.0 (Linux; U; Android 4.0.3; ko-kr; LG-L160L Build/IML74K) AppleWebkit/534.30 (KHTML, like Gecko) Version/4.0 Mobile Safari/534.30"
+import certifi
+
+MOBILE_BROWSER = "Mozilla/5.0 (Linux; U; android 4.0.3; ko-kr; LG-L160L Build/IML74K) AppleWebkit/534.30 (KHTML, like Gecko) Version/4.0 Mobile Safari/534.30"
 DESKTOP_BROWSER = "Mozilla/5.0 (Windows NT 6.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.80 Safari/537.36"
 
 
@@ -292,7 +295,11 @@ class network:
     def getOpener(self, values):
         opener_handlers = [urllib2.HTTPHandler(debuglevel = values.debug)]
         if hasattr(httplib, 'HTTPS'):
-            opener_handlers.append(urllib2.HTTPSHandler(debuglevel = values.debug))
+            context = ssl._create_unverified_context(purpose=ssl.Purpose.SERVER_AUTH,
+                                                     cafile=certifi.where())
+            https_handler = urllib2.HTTPSHandler(context=context, debuglevel = values.debug)
+            opener_handlers.append(https_handler)
+
         include = None if values.include else self.log
         pSwitches = [values.post301, values.post302, values.post303]
 #         opener_handlers = [LogHandler(values.url)] 
@@ -342,7 +349,6 @@ class network:
                 if values.proxy_auth == 'digest':
                     opener_handlers.append(urllib2.ProxyDigestAuthHandler(passwordManager))
             pass
-        
 
         opener = urllib2.build_opener(*opener_handlers)
         return opener

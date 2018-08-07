@@ -26,6 +26,7 @@ import importlib
 import StringIO
 # import xmlFileWrapper
 
+
 def widgetFactory(master, settings, selPane, panelModule=None, k=-1):
     widgetTypes = dict(sep=settSep, lsep=settSep,
                        text=settText,
@@ -39,8 +40,7 @@ def widgetFactory(master, settings, selPane, panelModule=None, k=-1):
                        folder=settFolder,
                        fileenum=settFileenum,
                        action=settAction,
-                       container=settContainer,
-                       scrolledcontainer=settScrolledContainer)
+                       container=settContainer,)
 
     if not panelModule and selPane.get('lib'):
         panelModule = selPane.get('lib')
@@ -54,8 +54,15 @@ def widgetFactory(master, settings, selPane, panelModule=None, k=-1):
             enableEc.append((k, setting.attrib['enable']))
         wType = options.get('type')
         widgetClass = widgetTypes.get(wType, None)
-        assert widgetClass is not None, 'The setting type "%s" is not a define type. \n' \
+        if not widgetClass and panelModule and hasattr(panelModule, wType):
+            widgetClass = getattr(panelModule, wType)
+            assert issubclass(widgetClass, baseWidget), 'All user defined widget must be inherited from baseWidget'
+        else:
+            assert widgetClass is not None, 'The setting type "%s" is not a define type. \n' \
                                         'It must me one of: %s ' % (wType, ', '.join(sorted(widgetTypes.keys())))
+
+        if options.get('id'): options['id'] = options['id'].split('/')[-1]
+
         wId = options.get('id')
         if wId and panelModule and hasattr(panelModule, wId):
             idClass = getattr(panelModule, wId)
@@ -66,21 +73,40 @@ def widgetFactory(master, settings, selPane, panelModule=None, k=-1):
             widgetClass = idClass
 
         dummy = widgetClass(master, **options)
-        if wType in ['container', 'scrolledcontainer']:
+        if isinstance(dummy, settContainer):
             wcontainer = dummy
-            if wType == 'scrolledcontainer': wcontainer = wcontainer.innerframe
+            if hasattr(wcontainer, 'innerframe'):
+                wcontainer = wcontainer.innerframe
             k, deltEnableEc = widgetFactory(wcontainer, settings, setting, panelModule=panelModule, k=k)
             enableEc += deltEnableEc
         if hasattr(dummy, 'id'):
             key = dummy.id
             if settings and settings.has_key(key):
                 dummy.setValue(settings[key])
-            dummy.form.registerWidget(key, dummy.path)
+            dummy.form.registerWidget(options['id'], dummy.path)
     return k, enableEc
 
+
+def formFrameGen(master, settings, selPane):
+    formclass = formFrame
+    formModule = None
+    if selPane.get('lib'):
+        libname = selPane.get('lib')
+        formModule = importlib.import_module(libname)
+        classname = selPane.get('label').title().replace(' ', '')
+        try:
+            formClass = getattr(formModule, classname)
+        except:
+            pass
+        else:
+            if issubclass(formClass, formFrame): formclass = formClass
+
+    return formclass(master, settings, selPane, formModule)
+
+
 class formFrame(tk.Frame):
-    def __init__(self, master, settings, selPane, background="SystemButtonFace"):
-        tk.Frame.__init__(self, master, background=background)
+    def __init__(self, master, settings, selPane, formModule=None):
+        tk.Frame.__init__(self, master)
         self.settings = {}
         self.enEquations = {}
         self.dependents = {}
@@ -90,7 +116,7 @@ class formFrame(tk.Frame):
         self.frame = frame = settContainer(self, name="frame")
         frame.pack(side=tk.TOP, fill=tk.X, expand=tk.YES)
 
-        self.populateWithSettings(settings, selPane)
+        self.populateWithSettings(settings, selPane, formModule)
 
     def __getattr__(self, attr):
         if attr in self.__dict__['widgetMapping']:
@@ -101,10 +127,10 @@ class formFrame(tk.Frame):
                 wdName, wpath = wpath.partition('.')[0:3:2]
                 widget = widget.nametowidget(wdName)
             return widget
-        raise AttributeError()
+        raise AttributeError("The '%s' form doesn't have an attribute call '%s'" % (self, attr))
 
-    def populateWithSettings(self, settings, selPane):
-        enableEq = widgetFactory(self.frame, settings, selPane)[1]
+    def populateWithSettings(self, settings, selPane, formModule):
+        enableEq = widgetFactory(self.frame, settings, selPane, panelModule=formModule)[1]
         self.nameToId = {value.rsplit('.', 1)[-1]:key for key, value in self.widgetMapping.items()}
         self.category = selPane.get('label')
         self.registerEc(enableEq)
@@ -188,11 +214,11 @@ class formFrame(tk.Frame):
                 pass
 
     def registerWidget(self, wdId, wdPath):
-        self.widgetMapping[wdId] = wdPath
+        self.widgetMapping[wdId.lower()] = wdPath
 
     def getWidgets(self, widgetsIds=None):
         widgetsIds = widgetsIds or self.widgetMapping.keys()
-        return [getattr(self, key) for key in widgetsIds]
+        return [self.__getattr__(key) for key in widgetsIds]
 
     def getGroupVar(self, groupName):
         return self.radioGroups.setdefault(groupName, tk.StringVar())
@@ -217,92 +243,32 @@ class formFrame(tk.Frame):
         toProcess = dict([(key, value) for key, value in changedSettings.items() if filterFlag(key)])
         return toProcess
 
-class scrolledFrame(tk.Frame):
-    def __init__(self, master, settings, selPane):
-        self.initDescenAscend()
-        tk.Frame.__init__(self, master)
-        self.pack(side = tk.TOP, fill = tk.BOTH, expand = 1)
-        self.canvas = tk.Canvas(self, borderwidth=0, background="SystemButtonFace")
-        self.category = selPane.get('label')
-        self.frame = formFrame(self.canvas, settings, selPane, background="SystemButtonFace")
-        self.frame.pack()
-
-        self.vsb = tk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
-        self.canvas.configure(yscrollcommand=self.vsb.set)
-
-        self.vsb.pack(side="right", fill="y")
-        self.canvas.pack(side="left", fill="both", expand=True)
-        self.canvas.create_window((4,4), window=self.frame, anchor="nw",
-                                  tags="self.frame")
-        self.canvas.bind("<Configure>", self.OnCanvasConfigure)
-
-    def OnFrameConfigure(self, event):
-        '''Reset the scroll region to encompass the inner frame'''
-        print 'onFrame'
-        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-
-    def OnCanvasConfigure(self, event):
-        x1, y1, x2, y2 = self.canvas.bbox("all")
-        self.frame.configure(width = event.width, height = y2-y1)
-        self.frame.pack_propagate(0)
-        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-
-    def modifySettingsValues(self, settings, filterFlag = lambda widget: hasattr(widget, 'id')):
-        widgets = self.widgets(filterFlag)
-        map(lambda w: w.setValue(settings.get(w.id, w.default)), widgets)
-
-    def initDescenAscend(self):
-        self.settings = {}
-        self.enEquations = {}
-        self.dependents = {}
-        self.widgetMapping = {}
-
-    def getChangeSettings(self, settings):
-        interiorFrame = self.frame
-        changedSettings = dict(reset = [])
-        for child in interiorFrame.getWidgets():
-            try:
-                flag = child.isValueSetToDefault()
-            except:
-                pass
-            else:
-                key, value = child.getSettingPair()
-                if not flag:
-                    changedSettings[key] = value
-                elif key and settings.has_key(key):
-                    changedSettings['reset'].append(key)
-        filterFlag = lambda key: (not settings.has_key(key) or settings[key] != changedSettings[key])
-        toProcess = dict([(key, value) for key, value in changedSettings.items() if filterFlag(key)])
-        return toProcess
-
-    def widgets(self, filterFunc = None):
-        allWidgets = self.frame.getWidgets()
-        return [aWidget for aWidget in allWidgets if filterFunc(aWidget)] if filterFunc else allWidgets
-
-    def getAllSettings(self, keyfunc = None):
-        keyfunc = keyfunc or operator.attrgetter('id')
-        allwidgets = self.frame.getWidgets()
-        allwidgets.sort(key = keyfunc)
-        return [widget.getSettingPair(tId = True) for widget in allwidgets]
 
 class baseWidget(tk.Frame):
     def __init__(self, master, **options):
-        self._id = options.pop('id')
-        wdgName = options.get('name').lower()
+        wdgName = options.get('name', '').lower()
+        try:
+            self._id = options.pop('id')
+        except:
+            self._id = wdgName
         if options.has_key('varType'): self.setVarType(options.pop('varType'))
         self.default = None
-        baseConf = dict(name=wdgName, bd=1, highlightbackground='dark grey', highlightthickness=2,
-                        highlightcolor='green', takefocus=1)
-        baseConf.update(options)
-        if isinstance(master, settContainer) or isinstance(master, settScrolledContainer):
+        if not issubclass(self.__class__, settContainer):
+            baseConf = dict(bd=1, highlightbackground='dark grey', highlightthickness=2,
+                            highlightcolor='green', takefocus=1)
+            baseConf.update(options)
+            if wdgName: baseConf['name'] = wdgName
+        else:
+            baseConf = dict(name=self._id)
+        tk.Frame.__init__(self, master, **baseConf)
+        if issubclass(master.__class__, settContainer):
             self.path = master.path + '.' + baseConf.get('name', '')
             self.form = master.form
+            master.applyGeoManager(self)
         else:
             self.path = baseConf.get('name', '')
             self.form = master
-        tk.Frame.__init__(self, master, **baseConf)
-        packSide = master.side if isinstance(master, settContainer) else tk.TOP
-        self.pack(side=packSide, fill=tk.X, ipadx=2, ipady=2, padx=1, pady=1)
+            self.pack(side=tk.TOP, fill=tk.X, ipadx=2, ipady=2, padx=1, pady=1)
 
     def setVarType(self, varType='string'):
         if varType == 'int':
@@ -327,12 +293,19 @@ class baseWidget(tk.Frame):
     def getValue(self):
         return self.value.get()
 
+    def getConfig(self, option):
+        return self.children[self.id].cget(option)
+
+    def setConfig(self, **options):
+        self.children[self.id].configure(**options)
+
     def setListener(self, function):
         self.listener = function
         self.value.trace("w", self.callListener)
 
     def callListener(self, *args):
         self.listener(self.name)
+
 
 class settLabel(baseWidget):
     def __init__(self, master, **options):
@@ -343,6 +316,7 @@ class settLabel(baseWidget):
 
     def setGUI(self, options):
         tk.Label(self, text = options.get('label'), width=20, anchor=tk.NW).pack(side = tk.LEFT, fill = tk.X, expand = 1)
+
 
 class myScrolledList(tk.Frame):
     def __init__(self, master):
@@ -383,7 +357,6 @@ class myScrolledList(tk.Frame):
             self.yview(tk.SCROLL, -1, tk.UNITS)
         widget.focus_force()
         return 'break'
-
 
     def setGUI(self):
         self.vsb = tk.Scrollbar(self, orient="vertical", command=self.yview)
@@ -447,6 +420,7 @@ class settFileenum(baseWidget):
                 filenames  = [elem.split('.')[0] for elem in filenames]
             return filenames
 
+
 class settFolder(baseWidget):
     def __init__(self, master, **options):
         wdgName = options.get('name').lower()
@@ -466,6 +440,7 @@ class settFolder(baseWidget):
         if folder:
             self.value.set(folder)
 
+
 class settFile(baseWidget):
     def __init__(self, master, **options):
         wdgName = options.get('name').lower()
@@ -484,6 +459,7 @@ class settFile(baseWidget):
         fileName = tkFileDialog.askopenfilename()
         if fileName:
             self.value.set(fileName)
+
 
 class settDDList(baseWidget):
     def __init__(self, master, **options):
@@ -518,6 +494,7 @@ class settDDList(baseWidget):
     def onChangeSel(self):
         pass
 
+
 class settEnum(baseWidget):
     def __init__(self, master, **options):
         wdgName = options.get('name').lower()
@@ -535,7 +512,6 @@ class settEnum(baseWidget):
             spBoxValues = options.get('lvalues').split('|')
         tk.Spinbox(self, name = self.id, textvariable = self.value, values = spBoxValues).pack(side = tk.RIGHT, fill = tk.X, expand = 1)
         self.setValue(self.default)
-
 
     def setValue(self, value):
         nPos = value.find('|')
@@ -565,7 +541,7 @@ class settOptionList(baseWidget):
         self.name = wdgName
 
     def setGUI(self, options):
-        settSep(self, name = 'label', type = 'lsep', label = options.get('label')).pack(side = tk.TOP, fill = tk.X)
+        settSep(self, name = 'label', type = 'lsep', label = options.get('label'))
 
         if options.get('id'): self.id = options.get('id').lower().replace('.', '__')
         self.default = options.get('default', '')
@@ -664,13 +640,14 @@ class settOptionList(baseWidget):
         iid = self.tree.focus()
         if iid: self.tree.delete(iid)
 
-    def setValue(self, value):
+    def setValue(self, value, sep=('|', ',')):
+        seprow, sepcol = sep
         lista = self.tree.get_children('')
         self.tree.delete(*lista)
         if value == '':return
         maxCol = len(self.columnsId) - 1
         if self.isTree: maxCol += 3
-        bDatos = [map(lambda x: x.strip(),record.split(',', maxCol)) for record in value.split('|')]
+        bDatos = [map(lambda x: x.strip(),record.split(sepcol, maxCol)) for record in value.split(seprow)]
         parent, iid, text = '', None, ''
         for record in bDatos:
             if self.isTree:
@@ -694,6 +671,7 @@ class settOptionList(baseWidget):
                 stack.extend(list(children)[::-1])
         return '|'.join(bDatos)
 
+
 class settSlider(baseWidget):
     def __init__(self, master, **options):
         wdgName = options.get('name').lower()
@@ -711,6 +689,7 @@ class settSlider(baseWidget):
         scale.pack(side = tk.RIGHT, fill = tk.X, expand = 1)
         if len(valRange) == 3: scale.configure(resolution = valRange[1])
         tk.Entry(self, textvariable = self.value).pack(side = tk.RIGHT, fill = tk.X)
+
 
 class settNumber(baseWidget):
     def __init__(self, master, **options):
@@ -748,6 +727,7 @@ class settNumber(baseWidget):
         self.entry.insert(0, value)
         pass
 
+
 class settText(baseWidget):
     def __init__(self, master, **options):
         wdgName = options.get('name').lower()
@@ -766,7 +746,6 @@ class settText(baseWidget):
         else:
             tk.Label(self, textvariable=self.value).pack(side=tk.RIGHT, fill=tk.X, expand=1)
 
-
     def setValue(self, value):
         if value == None:
             self.value.set('')
@@ -775,6 +754,7 @@ class settText(baseWidget):
 
     def getValue(self):
         return self.value.get() if self.value.get() != '' else ''
+
 
 class settBool(baseWidget):
     def __init__(self, master, **options):
@@ -798,7 +778,9 @@ class settBool(baseWidget):
         else:
             value_on = True
             self.setValue(self.default)
-        chkbtn = tk.Checkbutton(self, name=self.id, variable=self.value, onvalue=value_on, anchor=tk.E)
+        chkbtn = tk.Checkbutton(self, name=self.id, variable=self.value,
+                                onvalue=value_on, anchor=tk.E,
+                                command=self.onClick)
         chkbtn.pack(side = tk.RIGHT, fill = tk.X, expand = 1)
 
     def isValueSetToDefault(self):
@@ -813,6 +795,13 @@ class settBool(baseWidget):
             value = (value == self.id)
         return value
 
+    def onClick(self):
+        try:
+            self.form.onClickAction(self.id)
+        except:
+            pass
+
+
 class settAction(baseWidget):
     def __init__(self, master, **options):
         wdgName = options.get('name').lower()
@@ -825,9 +814,11 @@ class settAction(baseWidget):
         self.value = options.get('default')
         tk.Button(self, name=self.id, text=options.get('label'), command=self.onClick).pack(side=tk.RIGHT, fill=tk.X,
                                                                                             expand=1)
-
     def onClick(self):
-        pass
+        try:
+            self.form.onClickAction(self.id)
+        except:
+            pass
 
     def isValueSetToDefault(self):
         return True
@@ -844,11 +835,11 @@ class settAction(baseWidget):
     def callListener(self, *args):
         pass
 
-class settSep(tk.Frame):
+
+class settSep(baseWidget):
     def __init__(self, master, **options):
         wdgName = options.get('name').lower().lower()
-        tk.Frame.__init__(self, master, name = wdgName)
-        self.pack(side = tk.TOP, fill = tk.X, expand = 1)
+        baseWidget.__init__(self, master, name = wdgName)
         self.setGUI(options)
         self.name = wdgName
 
@@ -873,79 +864,138 @@ class settSep(tk.Frame):
     def setListener(self, function):
         pass
 
-class settContainer(tk.LabelFrame):
+
+class settContainer(baseWidget):
     def __init__(self, master, **options):
-        wdgName = options.get('name').lower().replace('.', '_')
-        packSide = options.get('side', 'top')
+        keys = set(('side', 'label', 'scrolled', 'type')).intersection(options)
+        contoptions = {key:options.pop(key) for key in keys}
+        packSide = contoptions.get('side', 'top')
         self.side = dict(top=tk.TOP, bottom=tk.BOTTOM, left=tk.LEFT, right=tk.RIGHT).get(packSide, tk.TOP)
+        wdgName = options.get('name', '').lower().replace('.', '_')
         id = options.get('id', wdgName).lower()
         if id != wdgName:
             self.id = id
-        tk.LabelFrame.__init__(self, master, name=id, text=options.get('label'))
-        if isinstance(master, settContainer) or isinstance(master, settScrolledContainer):
-            packSide = master.side
-            self.path = master.path + '.' + id
-            self.form = master.form
-        else:
-            packSide = tk.TOP
-            self.path = id
-            self.form = master
-        self.pack(side=packSide, fill=tk.X, expand=1)
+        baseWidget.__init__(self, master, **options)
         self.name = wdgName
 
-class settScrolledContainer(tk.LabelFrame):
+        self.innerframe = outerframe = self
+        if contoptions.has_key('label'):
+            outerframe = tk.LabelFrame(self, text=contoptions.get('label'))
+            outerframe.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
+            if contoptions.get('scrolled', 'false') == 'false':
+                self.innerframe = innerframe = settContainer(self, name="innerframe",
+                                                                side=self.side)
+                innerframe.pack(in_=outerframe, side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
 
-    def __init__(self, master, **options):
-        wdgName = options.get('name').lower().replace('.', '_')
-        packSide = options.get('side', 'top')
-        self.side = dict(top=tk.TOP, bottom=tk.BOTTOM, left=tk.LEFT, right=tk.RIGHT).get(packSide, tk.TOP)
-        id = options.get('id', wdgName).lower()
-        if id != wdgName:
-            self.id = id
-        tk.LabelFrame.__init__(self, master, name=id, text=options.get('label'))
-        if isinstance(master, settScrolledContainer) or isinstance(master, settContainer):
-            packSide = master.side
-            self.path = master.path + '.' + id
-            self.form = master.form
+        if contoptions.get('scrolled', 'false') == 'true':
+            outerframe.grid_columnconfigure(0, weight=1)
+            outerframe.grid_columnconfigure(1, weight=0)
+            outerframe.grid_rowconfigure(0, weight=1)
+
+            self.vsb = tk.Scrollbar(outerframe, orient="vertical", )
+            self.vsb.grid(row=0, column=1, sticky=tk.NS)
+
+            self.canvas = tk.Canvas(outerframe, name="canvas", borderwidth=0)
+            self.canvas.grid(row=0, column=0, sticky=tk.NSEW)
+
+            self.canvas.configure(yscrollcommand=self.vsb.set)
+            self.vsb.configure(command=self.canvas.yview)
+
+            self.canvas.xview_moveto(0)
+            self.canvas.yview_moveto(0)
+
+            self.innerframe = innerframe = settContainer(self, name="innerframe",
+                                                            side=self.side)
+            innerframe.pack_forget()
+            self.innerframeId = self.canvas.create_window((0, 0),
+                                                          window=innerframe,
+                                                          anchor="nw",
+                                                          tags="innerframe")
+
+
+            self.canvas.bind("<Configure>", self._OnCanvasConfigure)
+            self.innerframe.bind("<Configure>", self._OnInnerFrameConfigure)
+
+    def _OnCanvasConfigure(self, event):
+        if self.innerframe.winfo_reqheight() <= self.canvas.winfo_height():
+            self.vsb.grid_remove()
         else:
-            packSide = tk.TOP
-            self.path = id
-            self.form = master
-        self.pack(side=packSide, fill=tk.X, expand=1)
-        self.name = wdgName
+            self.vsb.grid()
 
-        self.vsb = tk.Scrollbar(self, orient="vertical", )
-        self.vsb.pack(side="right", fill="y")
-
-        self.canvas = tk.Canvas(self, name="canvas", borderwidth=0, background="SystemButtonFace")
-        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=tk.YES)
-
-        self.canvas.configure(yscrollcommand=self.vsb.set)
-        self.vsb.configure(command=self.canvas.yview)
-
-        self.canvas.xview_moveto(0)
-        self.canvas.yview_moveto(0)
-
-        self.innerframe = settContainer(self, name="innerframe")
-        self.innerframeId = self.canvas.create_window((0, 0),
-                                                      window=self.innerframe,
-                                                      anchor="nw",
-                                                      tags="innerframe")
-
-
-        self.canvas.bind("<Configure>", self.OnCanvasConfigure)
-        self.innerframe.bind("<Configure>", self.OnInnerFrameConfigure)
-
-    def OnCanvasConfigure(self, event):
         if self.innerframe.winfo_reqwidth() != self.canvas.winfo_width():
-            self.canvas.itemconfigure(self.innerframeId, width=self.canvas.winfo_width())
+            self.canvas.itemconfigure(self.innerframeId, width=self.canvas.winfo_width()-4)
 
-    def OnInnerFrameConfigure(self, event):
+    def _OnInnerFrameConfigure(self, event):
         size = (self.innerframe.winfo_reqwidth(), self.innerframe.winfo_reqheight())
         self.canvas.config(scrollregion="0 0 %s %s" % size)
+        options = {}
         if self.innerframe.winfo_reqwidth() != self.canvas.winfo_width():
             width = self.innerframe.winfo_reqwidth()
-            self.canvas.config(width=width)
+            options['width'] = width
+        if self.innerframe.winfo_reqheight() <= self.canvas.winfo_height():
+            height = self.innerframe.winfo_reqheight()
+            options['height'] = height
+        if options:
+            self.canvas.config(**options)
+
+    def isValueSetToDefault(self):
+        return True
+
+    def setValue(self, value):
+        pass
+
+    def getValue(self):
+        return self.innerframe
+
+    def applyGeoManager(self, widget):
+        widget.pack(side=self.side, expand=tk.YES, fill=tk.X,
+                    ipadx=2, ipady=2, padx=2, pady=2)
+
+
+class scrolledFrame(settContainer):
+
+    def __init__(self, master, settings, selPane):
+        self.settings = {}
+        settContainer.__init__(self, master, label='')
+        self.pack_forget()
+        self.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
+        self.category = selPane.get('label')
+        self.frame = formFrameGen(self.innerframe, settings, selPane)
+        self.frame.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
+        pass
+
+    def modifySettingsValues(self, settings, filterFlag=lambda widget: hasattr(widget, 'id')):
+        widgets = self.widgets(filterFlag)
+        map(lambda w: w.setValue(settings.get(w.id, w.default)), widgets)
+
+    def getChangeSettings(self, settings):
+        interiorFrame = self.frame
+        changedSettings = dict(reset=[])
+        for child in interiorFrame.getWidgets():
+            try:
+                flag = child.isValueSetToDefault()
+            except:
+                pass
+            else:
+                key, value = child.getSettingPair()
+                if not flag:
+                    changedSettings[key] = value
+                elif key and settings.has_key(key):
+                    changedSettings['reset'].append(key)
+        filterFlag = lambda key: (not settings.has_key(key) or settings[key] != changedSettings[key])
+        toProcess = dict([(key, value) for key, value in changedSettings.items() if filterFlag(key)])
+        return toProcess
+
+    def widgets(self, filterFunc=None):
+        allWidgets = self.frame.getWidgets()
+        return [aWidget for aWidget in allWidgets if filterFunc(aWidget)] if filterFunc else allWidgets
+
+    def getAllSettings(self, keyfunc=None):
+        keyfunc = keyfunc or operator.attrgetter('id')
+        allwidgets = self.frame.getWidgets()
+        allwidgets.sort(key=keyfunc)
+        return [widget.getSettingPair(tId=True) for widget in allwidgets]
+
 
 class AppSettingDialog(tk.Toplevel):
     def __init__(self, master, xmlSettingFile, isFile = True, settings = None, title = None, dheight = None, dwidth = None):
@@ -1017,9 +1067,7 @@ class AppSettingDialog(tk.Toplevel):
             self.result = dict(self.settings)
             self.allSettings = self.rightPane.getAllSettings(keyfunc = lambda x: int(x.name))
         self.Close()
-        
-        
-            
+
     def setFrameFromXML(self):
         root = self.root
         self.intVar = tk.IntVar()
@@ -1043,9 +1091,11 @@ class AppSettingDialog(tk.Toplevel):
         self.rightPane = scrolledFrame(self.topPane, self.settings, selPane)
         self.rightPane.pack(side = tk.TOP, fill = tk.BOTH)
 
+
 class TreeDialog(tkSimpleDialog.Dialog):
     def __init__(self, master, title=None, xmlFile=None, isFile=False, settings=None):
         import xmlFileWrapper
+        self.allSettings = None
         self.settings = settings = settings or {}
         self.ads = xmlFileWrapper.xmlFileWrapper(xmlFile, isFile=isFile, nonDefaultValues=settings)
         tkSimpleDialog.Dialog.__init__(self, master, title)
@@ -1058,7 +1108,7 @@ class TreeDialog(tkSimpleDialog.Dialog):
         by the __init__ method.
         '''
         selPanel = self.ads.getActivePane()
-        self.form = form = formFrame(master, {}, selPanel)
+        self.form = form = formFrameGen(master, {}, selPanel)
         form.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
         wdgId = sorted(form.nameToId.keys(), key=int)[0]
         wdgId = form.nameToId[wdgId]
@@ -1106,10 +1156,10 @@ class TreeDialog(tkSimpleDialog.Dialog):
         tkSimpleDialog.Dialog.geometry(self, posStr)
 
 
-def builtAddonXmlFile(noDefaultSettings):
-    root = ET.fromstring(adonxmldesc)
-    addonXml = processTemplate(root)
-    return addonXml
+# def builtAddonXmlFile(noDefaultSettings):
+#     root = ET.fromstring(adonxmldesc)
+#     addonXml = processTemplate(root)
+#     return addonXml
 
 
 def getAddonXmlFile(xmlTemplate, settings):
@@ -1164,6 +1214,7 @@ def getAddonXmlFile(xmlTemplate, settings):
     xmlTemplate = xmlTemplate[:posINI] + template.strip() + xmlTemplate[posFIN:]
     return xmlTemplate
     
+
 def getScriptSettings(xmlSettingFile, settings):
     root = ET.parse(xmlSettingFile).getroot()
     for elem in root.iter('setting'):
@@ -1174,6 +1225,7 @@ def getScriptSettings(xmlSettingFile, settings):
             settings[key] = value
             print key, '=', value
     return settings
+
 
 def exportAddon(xmlAddonStructure, settings, calcFiles, afile = None):
     from xbmc import translatePath
