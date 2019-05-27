@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 from resolverTools import *
-import time
+import math, time
+from random import random
 
 def hostAndMediaId(videoUrl):
     if isinstance(videoUrl, basestring):
+        videoUrl = re.sub(r'-[0-9]{3}x[0-9]{3}|embed-', '', videoUrl)
         pattern = r'https*://(?:www.)*([a-z]+).+?[/=]([0-9A-Za-z_-]{10,})[./]*'
         try:
             host, media_id = re.search(pattern, videoUrl).groups()
@@ -13,8 +15,8 @@ def hostAndMediaId(videoUrl):
         host, media_id = videoUrl
     else:
         raise Exception('Invalid videoUrl, You must supply a videoUrl or a pair of (host, media_id)')
-    media_id = media_id.replace('embed-', '')
-    media_id = re.sub(r'-[0-9]{3}x[0-9]{3}', '', media_id)
+    # media_id = media_id.replace('embed-', '')
+    # media_id = re.sub(r'-[0-9]{3}x[0-9]{3}', '', media_id)
     return (host, media_id)
 
 def getMediaUrl(videoUrl):
@@ -39,26 +41,27 @@ def jwplayerFamilyResolver(domain, videoId, headers = None, wait=0, hasForm=True
         content = openUrl(url)[1]
     if isPacked:
         pattern = r'(?#<script *="eval\((.+?)\)\s"=puzzle>)'
-    else:
-        pattern = r'(?#<script *="\s*jwplayer\(.+?"=puzzle>)'
-    try:
-        content = CustomRegEx.search(pattern, content).group('puzzle')
-    except:
-        raise Exception('Resolver %s: No puzzle detected' % domain)
-    if isPacked: content = unpack(content)
+        try:
+            content = CustomRegEx.search(pattern, content).group('puzzle')
+        except:
+            raise Exception('Resolver %s: No puzzle detected' % domain)
+        content = unpack(content)
     source = getJwpSource(content, sourcesLabel='sources', orderBy='label')
     encodedHeaders = urllib.urlencode({'User-Agent':DESKTOP_BROWSER})
     urlStr = '%s|%s' % (source, encodedHeaders)
     return urlStr
 
+def clipwatching(videoId, headers=None):
+    return jwplayerFamilyResolver('vidtodoo.com', videoId, headers, hasForm=False, isPacked=False)
+
 def vidoza(videoId, headers = None):
-    return jwplayerFamilyResolver('vidoza.net', videoId, headers, hasForm=False, isPacked=False)
+    return nowvideoFamilyResolver('clipwatching.com', videoId, headers, hasForm=False, isPacked=True)
 
 def flashx(videoId, headers=None):
     return jwplayerFamilyResolver('flashx.tv', videoId + '.html', headers, wait=5)
 
 def vidtodo(videoId, headers = None):
-    return jwplayerFamilyResolver('vidtodo.com', videoId, headers)
+    return jwplayerFamilyResolver('vidtodoo.com', videoId, headers, hasForm=False, isPacked=False)
 
 def vidto(videoId, headers=None):
     return jwplayerFamilyResolver('vidto.me', videoId + '.html', headers, wait=6, isPacked=False)
@@ -73,7 +76,15 @@ def daclips(videoId, headers=None):
     return jwplayerFamilyResolver('daclips.in', videoId, headers, wait=1, hasForm=False, isPacked=False)
 
 def speedvid(videoId, headers = None):
-    return jwplayerFamilyResolver('www.speedvid.net', videoId, headers, hasForm=False)
+    url_ref = "https://www.speedvid.net/embed-%s-600x338.html" % videoId
+    url, content = openUrl(url_ref)
+    puzzle = CustomRegEx.search(r'(?#<script type *=puzzle>)', content).group('puzzle')
+    puzzle = transOpenloadPuzzle(puzzle)
+    videoId = re.search(r'assign.+?"/(.+?)"', puzzle).group(1)
+    headers = headers or {}
+    headers['Referer'] = url_ref
+    headers['Cookie'] = str((int(math.floor((900-100)*random())+100))*(int(time.time()))*(128/8))
+    return jwplayerFamilyResolver('speedvid.net', videoId, headers, hasForm=False)
 
 def vidzi(videoId, headers = None):
     headers = headers or {}
@@ -86,7 +97,7 @@ def vodlock(videoId, headers=None):
     return jwplayerFamilyResolver('vodlock.co', videoId, headers, wait=3)
 
 def vidlox(videoId, headers=None):
-    return jwplayerFamilyResolver('vidlox.tv', videoId, headers, hasForm=False, isPacked=False)
+    return jwplayerFamilyResolver('vidlox.me', videoId, headers, hasForm=False, isPacked=False)
 
 def estream(videoId, headers=None):
     headers = headers or {}
@@ -106,19 +117,23 @@ def estream(videoId, headers=None):
     return urlStr
 
 def gamovideo(videoId, headers=None):
-    headers = headers or {}
-    headers['User-Agent'] = DESKTOP_BROWSER
-    encodeHeaders = urllib.urlencode(headers)
-    urlStr = 'http://gamovideo.com/embed-%s-600x360.html<headers>%s' % (videoId, encodeHeaders)
-    content = openUrl(urlStr)[1]
-    pattern = r'file: *"(?P<url>http:[^"]+\.mp4)"'
-    m = re.search(pattern, content)
-    encheaders = urllib.urlencode({'User-Agent':DESKTOP_BROWSER, 'Referer':'http://gamovideo.com/embed-%s-600x360.html' % videoId})
-    urlStr = '|'.join((m.group(1), encheaders))
-    return urlStr
+    videoId = 'embed-%s-600x360.html' % videoId
+    return jwplayerFamilyResolver('gamovideo.com', videoId, headers, hasForm=False, isPacked=True)
+    #
+    #
+    # headers = headers or {}
+    # headers['User-Agent'] = DESKTOP_BROWSER
+    # encodeHeaders = urllib.urlencode(headers)
+    # urlStr = 'http://gamovideo.com/embed-%s-600x360.html<headers>%s' % (videoId, encodeHeaders)
+    # content = openUrl(urlStr)[1]
+    # pattern = r'file: *"(?P<url>http:[^"]+\.mp4)"'
+    # m = re.search(pattern, content)
+    # encheaders = urllib.urlencode({'User-Agent':DESKTOP_BROWSER, 'Referer':'http://gamovideo.com/embed-%s-600x360.html' % videoId})
+    # urlStr = '|'.join((m.group(1), encheaders))
+    # return urlStr
 gamo = gamovideo
 
-def openload(videoId, headers = None):
+def openload_xx(videoId, headers = None):
     ''' Marzo 14 de 2017'''
     headers = headers or {}
     headers['User-Agent'] = DESKTOP_BROWSER
@@ -167,7 +182,6 @@ def openload(videoId, headers = None):
     urlStr = '%s|%s' % (videoUrl,urllib.urlencode({'Referer': urlStr, 'User-Agent':DESKTOP_BROWSER}))
     return urlStr
 
-
 def nowvideoFamilyResolver(domain, videoId, headers, hasForm=True, upgradeInsecureRequest=0):
     headers = headers or {}
     headers['User-Agent'] = DESKTOP_BROWSER
@@ -201,6 +215,10 @@ def nowvideo(videoId, headers=None):
 def cloudtime(videoId, headers=None):
     videoId = 'video/%s' % videoId
     return nowvideoFamilyResolver('www.cloudtime.to', videoId, headers)
+
+def vshare(videoId, headers=None):
+    videoId = 'embed-%s.html' % videoId
+    return nowvideoFamilyResolver('vshare.eu', videoId, headers, hasForm=False)
 
 def movshare(videoId, headers=None):
     videoId = 'video/%s' % videoId
@@ -281,7 +299,29 @@ def playFamilyResolver(domain, videoId, wait, headers=None, **reqattr):
     return urlStr
 
 def streamplay(videoId, headers=None):
-    return playFamilyResolver('www.streamplay.to', videoId, 5, headers)
+    videoId = "ncic2x6t257y"
+    headers = headers or {}
+    base_url = 'https://streamplay.me/player-%s.html' % videoId
+    referer = base_url.replace('/player-', '/preview-')
+    headers.update({'User-Agent': DESKTOP_BROWSER, 'Referer': referer})
+    url = '%s<headers>%s' % (base_url, urllib.urlencode(headers))
+    url = 'https://streamplay.me/player-ncic2x6t257y.html<headers>Referer=https%3A%2F%2Fstreamplay.me%2Fpreview-ncic2x6t257y.html&User-Agent=Mozilla%2F5.0+%28Windows+NT+6.0%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F47.0.2526.80+Safari%2F537.36'
+    url, content = openUrl(url)
+    pattern = r'(?#<script *="eval\((.+?)\)\s"=puzzle>)'
+    try:
+        content = CustomRegEx.search(pattern, content).group('puzzle')
+    except:
+        raise Exception('Resolver %s: No puzzle detected' % 'streamplay')
+    content = unpack(content)
+    source = getJwpSource(content, sourcesLabel='sources')
+    pattern = r'[0-9a-zA-Z]{40,}'
+    to_decode = re.search(pattern, source).group()
+    decoded = to_decode[::-1]
+    decoded = decoded[:2] + decoded[3:]
+    videourl = source.replace(to_decode, decoded)
+    headers['Referer'] = base_url
+    urlStr = '%s|%s' % (videourl, urllib.urlencode(headers))
+    return urlStr
 play = streamplay
 
 def powvideo(videoId, headers=None):
@@ -294,8 +334,34 @@ def watchers(videoId, headers=None):
     videoId += '.html'
     return playFamilyResolver('watchers.to', videoId, 0, headers, id='noform')
 
+def streamango(videoId, headers=None):
+    headers = headers or {}
+    headers['User-Agent'] = DESKTOP_BROWSER
+    encodedHeaders = urllib.urlencode(headers)
+    url = 'https://streamango.com/embed/%s/' % videoId
+    url += '<headers>%s' % encodedHeaders
+    content = openUrl(url)[1]
+    pattern = r"d\('(?P<encoded>[^']+)',(?P<code>[0-9]+)\)"
+    m = re.search(pattern, content)
+    try:
+        encoded, code = m.group('encoded'), int(m.group('code'))
+    except:
+        raise Exception('Resolver streammango: No (encoded, code) pair detected')
+    k = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/='
+    k = k[::-1]
 
+    urlStr = ''
+    for w in range(0, len(encoded), 4):
+        x1, x2, x3, x4 = map(k.index, encoded[w:w+4])
+        b1 = (x1 << 2) | (x2 >> 4)
+        b2 = ((x2 & 15) << 4) | (x3 >> 2)
+        b3 = ((x3 & 3) << 6) | x4
+        b1 = b1 ^ code
+        urlStr += chr(b1) + chr(b2) + chr(b3)
 
+    urlStr = urlparse.urljoin('https://streammango.com', urlStr.rstrip(chr(64)))
+    urlStr = '%s|%s' % (urlStr, encodedHeaders)
+    return urlStr
 
 
 """----------------- EN DESARROLLO-------------"""
@@ -663,6 +729,78 @@ return: "\"
     code = code.replace('"""','"')
     pass
 
+def openload(videoId, headers=None):
+    '''3/10/2018'''
+    def int32(x):
+        if x > 0xFFFFFFFF:
+            raise OverflowError
+        if x > 0x7FFFFFFF:
+            x = int(0x100000000 - x)
+            if x < 2147483648:
+                return -x
+            else:
+                return -2147483648
+        return x
+
+    def getParts(dcd):
+        answ = []
+        while dcd:
+            ix = []
+            i = 0
+            while True:
+                sval = int(dcd[i:i + 2], 16)
+                ix.append(sval & 63)
+                i += 2
+                if sval < 64:
+                    break
+            six = sum(map(lambda w: ix[w] * (2 ** (6 * w)), range(len(ix))))
+            answ.append(int32(six))
+            dcd = dcd[i:]
+        return answ
+
+    def getDelta(x94):
+        six = int32(parts[x94])
+        paramSeq = [l02[x94 % 9], param1, param2]
+        msix = reduce(lambda x, y: x ^ y,
+                      paramSeq,
+                      six)
+        mmsix = '%x' % msix
+        delta = ''.join(map(lambda x: chr(int(mmsix[x - 2:x], 16) - 1), [8, 6, 4, 2]))
+        return delta
+
+    headers = headers or {}
+    headers['User-Agent'] = DESKTOP_BROWSER
+    urlStr = 'https://openload.co/embed/%s/<headers>%s' % (videoId, urllib.urlencode(headers))
+    content = openUrl(urlStr)[1]
+    try:
+        encpatt =  r'(?#<p *="[0-9a-z]{100,}"=encoded>)'
+        encoded = CustomRegEx.search(encpatt, content).group('encoded')
+        parampatt = r"\(*parseInt\('[^']+',8\).+?[,;]"
+        param1, param2 = CustomRegEx.findall(parampatt, content)
+    except:
+        raise Exception('Resolver openload.co: No encoded detected')
+    # encoded = 'd4c3b40613706dcee48db42a61739f201308fe6ee9f031723cc767c28e5e35d052d140644a716d46034c57407274037c656d4b1c66585f745f036d59496a6e027e5d55465c014f6b605f4e025e57547e266141664f78024164785827485277707102'
+    # param1 = "(parseInt('753470202407', 8) - 710 + 0x4 - 3) / (31 - 0x8)),"
+    # param2 = 'parseInt("5532174121", 8) - 23;'
+    param1 = int32(eval('(' + param1[:-1], {'parseInt':int}))
+    param2 = int32(eval(param2[:-1], {'parseInt':int}))
+
+    dcd = encoded
+    eff = 9*8
+    c49 = dcd[:eff]
+    l02 = map(lambda x: int32(int(c49[x:x + 8], 16)), range(0, eff, 8))
+    dcd = dcd[eff:]
+    parts = getParts(dcd)
+    assert len(parts) == 11, 'More than 44 characters'
+    decoded = ''.join(map(getDelta, range(len(parts))))
+    decoded = decoded.rstrip('$')
+    videoUrl =  'https://oload.cloud/stream/{0}?mime=true'.format(decoded)
+
+    headers['Referer'] = 'https://openload.co/embed/%s/' % videoId
+    urlStr = '%s|%s' % (videoUrl,urllib.urlencode(headers))
+    return urlStr
+
+
 def openload_02(videoId, headers = None):
     ''' Febrero 7 de 2017'''
     headers = headers or {}
@@ -760,84 +898,96 @@ def openloadBASE(videoId, headers = None):
         pattern = r'(?#<script src="/assets/[0-9a-f]+/yii.activeForm.js">< *=puzzle>)'
         # pattern = r'(?#<script src="/assets/js/video-js/video.js.ol.js">< *=puzzle>)'
         # puzzle = CustomRegEx.findall(pattern, content)[0]
-        puzzle = """ﾟωﾟﾉ= /｀ｍ´）ﾉ ~┻━┻   //*´∇｀*/ ['_']; o=(ﾟｰﾟ)  =_=3; c=(ﾟΘﾟ) =(ﾟｰﾟ)-(ﾟｰﾟ); (ﾟДﾟ) =(ﾟΘﾟ)= (o^_^o)/ (o^_^o);(ﾟДﾟ)={ﾟΘﾟ: '_' ,ﾟωﾟﾉ : ((ﾟωﾟﾉ==3) +'_') [ﾟΘﾟ] ,ﾟｰﾟﾉ :(ﾟωﾟﾉ+ '_')[o^_^o -(ﾟΘﾟ)] ,ﾟДﾟﾉ:((ﾟｰﾟ==3) +'_')[ﾟｰﾟ] }; (ﾟДﾟ) [ﾟΘﾟ] =((ﾟωﾟﾉ==3) +'_') [c^_^o];(ﾟДﾟ) ['c'] = ((ﾟДﾟ)+'_') [ (ﾟｰﾟ)+(ﾟｰﾟ)-(ﾟΘﾟ) ];(ﾟДﾟ) ['o'] = ((ﾟДﾟ)+'_') [ﾟΘﾟ];(ﾟoﾟ)=(ﾟДﾟ) ['c']+(ﾟДﾟ) ['o']+(ﾟωﾟﾉ +'_')[ﾟΘﾟ]+ ((ﾟωﾟﾉ==3) +'_') [ﾟｰﾟ] + ((ﾟДﾟ) +'_') [(ﾟｰﾟ)+(ﾟｰﾟ)]+ ((ﾟｰﾟ==3) +'_') [ﾟΘﾟ]+((ﾟｰﾟ==3) +'_') [(ﾟｰﾟ) - (ﾟΘﾟ)]+(ﾟДﾟ) ['c']+((ﾟДﾟ)+'_') [(ﾟｰﾟ)+(ﾟｰﾟ)]+ (ﾟДﾟ) ['o']+((ﾟｰﾟ==3) +'_') [ﾟΘﾟ];(ﾟДﾟ) ['_'] =(o^_^o) [ﾟoﾟ] [ﾟoﾟ];(ﾟεﾟ)=((ﾟｰﾟ==3) +'_') [ﾟΘﾟ]+ (ﾟДﾟ) .ﾟДﾟﾉ+((ﾟДﾟ)+'_') [(ﾟｰﾟ) + (ﾟｰﾟ)]+((ﾟｰﾟ==3) +'_') [o^_^o -ﾟΘﾟ]+((ﾟｰﾟ==3) +'_') [ﾟΘﾟ]+ (ﾟωﾟﾉ +'_') [ﾟΘﾟ]; (ﾟｰﾟ)+=(ﾟΘﾟ); (ﾟДﾟ)[ﾟεﾟ]='\\'; (ﾟДﾟ).ﾟΘﾟﾉ=(ﾟДﾟ+ ﾟｰﾟ)[o^_^o -(ﾟΘﾟ)];(oﾟｰﾟo)=(ﾟωﾟﾉ +'_')[c^_^o];(ﾟДﾟ) [ﾟoﾟ]='\"';(ﾟДﾟ) ['_'] ( (ﾟДﾟ) ['_'] (ﾟεﾟ+(ﾟДﾟ)[ﾟoﾟ]+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ ((o^_^o) +(o^_^o) +(c^_^o))+ ((ﾟｰﾟ) + (o^_^o))+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ ((ﾟｰﾟ) + (ﾟΘﾟ))+ (-~0)+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ ((ﾟｰﾟ) + (ﾟΘﾟ))+ ((o^_^o) +(o^_^o) +(c^_^o))+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ (-~3)+ (-~3)+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ ((ﾟｰﾟ) + (ﾟΘﾟ))+ ((ﾟｰﾟ) + (o^_^o))+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ ((o^_^o) +(o^_^o) +(c^_^o))+ ((ﾟｰﾟ) + (o^_^o))+ (ﾟДﾟ)[ﾟεﾟ]+((ﾟｰﾟ) + (ﾟΘﾟ))+ ((o^_^o) +(o^_^o) +(c^_^o))+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ ((o^_^o) +(o^_^o) +(c^_^o))+ (-~1)+ (ﾟДﾟ)[ﾟεﾟ]+((ﾟｰﾟ) + (o^_^o))+ ((ﾟｰﾟ) + (ﾟΘﾟ))+ (ﾟДﾟ)[ﾟεﾟ]+(-~3)+ ((ﾟｰﾟ) + (o^_^o))+ (ﾟДﾟ)[ﾟεﾟ]+((o^_^o) +(o^_^o) +(c^_^o))+ ((c^_^o)-(c^_^o))+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ (-~3)+ (-~0)+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ (-~3)+ (-~1)+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ ((c^_^o)-(c^_^o))+ (-~-~1)+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ ((ﾟｰﾟ) + (o^_^o))+ ((c^_^o)-(c^_^o))+ (ﾟДﾟ)[ﾟεﾟ]+((o^_^o) +(o^_^o) +(c^_^o))+ (-~-~1)+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ ((o^_^o) +(o^_^o) +(c^_^o))+ (-~0)+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ ((ﾟｰﾟ) + (ﾟΘﾟ))+ ((ﾟｰﾟ) + (ﾟΘﾟ))+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ (-~0)+ ((ﾟｰﾟ) + (o^_^o))+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ ((ﾟｰﾟ) + (ﾟΘﾟ))+ ((c^_^o)-(c^_^o))+ (ﾟДﾟ)[ﾟεﾟ]+(-~3)+ ((ﾟｰﾟ) + (o^_^o))+ (ﾟДﾟ)[ﾟεﾟ]+((ﾟｰﾟ) + (o^_^o))+ (-~-~1)+ (ﾟДﾟ)[ﾟoﾟ]) (ﾟΘﾟ)) ('_');"""
-        vars = sorted(set(re.findall(r'\(([^=)(]+)\) *=', puzzle)))
-        keys1 = re.findall(r', *(?P<key>[^: ]+) *:', puzzle)
-        keys2 = re.findall(r"\(ﾟДﾟ\) *\[[^']+\] *=", puzzle)
-        keys = sorted(set(keys1 + keys2))
-        totVars = vars + keys
-        for k in range(len(vars)):
-            puzzle = puzzle.replace(vars[k], varTags[k])
-        for k in range(len(keys)):
-            puzzle = puzzle.replace(keys[k], varTags[-k - 1])
-    #     puzzle = puzzle.replace('\xef\xbe\x89'.decode('utf-8'), '').replace(' ','')
-        puzzle = re.sub(r'[ \x80-\xff]','',puzzle)
-        pat_dicId = r'\(([A-Z])\)={'
-        m = re.search(pat_dicId, puzzle)
-        assert m, 'No se encontro Id del diccionario'
-        dicId = m.group(1)
-    #     pat_obj = r"\(\(%s\)\+\\'_\\'\)" % dicId
-        dic_pat1 = r"\(\(%s\)\+\'_\'\)" % dicId
-        dic_pat2 = r"\(%s\+([^+)]+)\)" % dicId
-        dic_pat3 = r"\(%s\)\.(.+?)\b" % dicId
-        dic_pat4 = r"(?<=[{,])([^: ]+)(?=:)"
+        speedvid = """ ﾟωﾟﾉ =/｀ｍ´ ） ﾉ~┻ ━┻ //*´∇｀*/ [ '_'] ;(o=((ﾟｰﾟ))  =_=3 ); c=( (ﾟΘﾟ))=(ﾟｰﾟ)-(ﾟｰﾟ); (ﾟДﾟ) =((ﾟΘﾟ) )= ((o^_^o))/ ((o^_^o));((ﾟДﾟ))={ﾟΘﾟ: '_' ,ﾟωﾟﾉ : ( (ﾟωﾟﾉ==3) +'_') [ﾟΘﾟ] ,ﾟｰﾟﾉ :(ﾟωﾟﾉ+ '_')[o^_^o -((ﾟΘﾟ))] ,ﾟДﾟﾉ:(((ﾟｰﾟ==3) +'_'))[ﾟｰﾟ] }; ((ﾟДﾟ) [ﾟΘﾟ]) =((ﾟωﾟﾉ==3) +'_') [c^_^o];((ﾟДﾟ))['c'] = ((ﾟДﾟ)+'_') [ (ﾟｰﾟ)+(ﾟｰﾟ)-((ﾟΘﾟ)) ];((ﾟДﾟ))['o'] = ((ﾟДﾟ)+'_') [ﾟΘﾟ];(ﾟoﾟ)=(ﾟДﾟ) ['c']+((ﾟДﾟ)) ['o']+(ﾟωﾟﾉ +'_')[ﾟΘﾟ]+ ((ﾟωﾟﾉ==3) +'_') [ﾟｰﾟ] + ((ﾟДﾟ) +'_') [(ﾟｰﾟ)+(ﾟｰﾟ)]+ ((ﾟｰﾟ==3) +'_') [ﾟΘﾟ]+((ﾟｰﾟ==3) +'_') [(ﾟｰﾟ) - ((ﾟΘﾟ))]+(ﾟДﾟ) ['c']+((ﾟДﾟ)+'_') [((ﾟｰﾟ))+(ﾟｰﾟ)]+ (ﾟДﾟ) ['o']+((ﾟｰﾟ==3) +'_') [ﾟΘﾟ];((ﾟДﾟ)) ['_'] =((o^_^o)) [ﾟoﾟ][ﾟoﾟ];((ﾟεﾟ))=((ﾟｰﾟ==3) +'_') [ﾟΘﾟ]+ (ﾟДﾟ) .ﾟДﾟﾉ+((ﾟДﾟ)+'_') [(ﾟｰﾟ) + (ﾟｰﾟ)]+((ﾟｰﾟ==3) +'_') [o^_^o-ﾟΘﾟ]+((ﾟｰﾟ==3) +'_') [ﾟΘﾟ]+ (ﾟωﾟﾉ +'_') [ﾟΘﾟ]; (ﾟｰﾟ)+=((ﾟΘﾟ)); (ﾟДﾟ)[ﾟεﾟ]='\\'; (ﾟДﾟ).ﾟΘﾟﾉ=(ﾟДﾟ+ ﾟｰﾟ)[o^_^o -((ﾟΘﾟ))];(oﾟｰﾟo)=(ﾟωﾟﾉ +'_')[c^_^o];((ﾟДﾟ)) [ﾟoﾟ]='\"';(ﾟДﾟ) ['_'] ( (ﾟДﾟ) ['_'] (ﾟεﾟ+/*´∇｀*/((((ﾟДﾟ))) [ﾟoﾟ]) + (ﾟДﾟ)[ﾟεﾟ]+(-(-((ﾟΘﾟ))+((ﾟΘﾟ)))+((ﾟｰﾟ)-((o^_^o))))+((((ﾟΘﾟ))-(c^_^o))+(((o^_^o))-(c^_^o))+(-((o^_^o))+(ﾟｰﾟ)))+(((c^_^o)+(ﾟｰﾟ))+((ﾟｰﾟ)-(ﾟｰﾟ)))+(ﾟДﾟ)[ﾟεﾟ]+(((ﾟｰﾟ)+(c^_^o))-(-(c^_^o)+((o^_^o))))+((-((ﾟΘﾟ))+((o^_^o))-((ﾟΘﾟ)))+(((o^_^o))+((ﾟΘﾟ))))+((((ﾟΘﾟ))-(c^_^o))+(((o^_^o))-(c^_^o))+(((o^_^o))-(c^_^o)))+(ﾟДﾟ)[ﾟεﾟ]+(-(-((ﾟΘﾟ))+((o^_^o))-((ﾟΘﾟ)))-(((o^_^o))-((ﾟΘﾟ))-((ﾟΘﾟ)))+(((ﾟΘﾟ))+((ﾟΘﾟ))+(ﾟｰﾟ)-((o^_^o))))+(((ﾟｰﾟ)+(c^_^o))-((c^_^o)-(c^_^o)))+(((ﾟｰﾟ)-((o^_^o)))-(-(c^_^o)+((o^_^o)))+(((ﾟΘﾟ))-(c^_^o))+(((o^_^o))+((ﾟΘﾟ))))+(ﾟДﾟ)[ﾟεﾟ]+(-((c^_^o)-(c^_^o))+(-((o^_^o))+(ﾟｰﾟ)))+((-((ﾟΘﾟ))+((ﾟΘﾟ)))+(((ﾟΘﾟ))+((o^_^o))))+((((ﾟΘﾟ))-(c^_^o))-(((ﾟΘﾟ))-((ﾟΘﾟ))))+(ﾟДﾟ)[ﾟεﾟ]+(-((ﾟｰﾟ)-((o^_^o)))-(((o^_^o))-((ﾟΘﾟ))-((ﾟΘﾟ)))+(-(c^_^o)+((o^_^o))))+((-(c^_^o)+((ﾟΘﾟ)))+((ﾟｰﾟ)+(c^_^o))+(-((ﾟΘﾟ))-((ﾟΘﾟ))+((o^_^o))))+((-(c^_^o)+((o^_^o)))+(-((ﾟΘﾟ))+((o^_^o))-((ﾟΘﾟ))))+(ﾟДﾟ)[ﾟεﾟ]+((-((ﾟΘﾟ))+((o^_^o))-((ﾟΘﾟ)))-(-(c^_^o)+(c^_^o)))+((((o^_^o))+((ﾟΘﾟ)))+(-((ﾟΘﾟ))-((ﾟΘﾟ))+((o^_^o))))+((-(c^_^o)+((ﾟΘﾟ)))-(-(c^_^o)+(c^_^o)))+(ﾟДﾟ)[ﾟεﾟ]+(-(-(c^_^o)+(c^_^o))+(((ﾟΘﾟ))-(c^_^o)))+((-((o^_^o))+(ﾟｰﾟ))+((ﾟｰﾟ)+(c^_^o)))+((-(c^_^o)+(ﾟｰﾟ))-((ﾟｰﾟ)-((o^_^o)))+(((ﾟΘﾟ))+((o^_^o))))+(ﾟДﾟ)[ﾟεﾟ]+(-(((o^_^o))-((ﾟΘﾟ))-((ﾟΘﾟ)))+(((o^_^o))-(c^_^o))-(-((o^_^o))+(ﾟｰﾟ)))+((-(c^_^o)+(ﾟｰﾟ))+(((ﾟΘﾟ))-(c^_^o)))+(-(((ﾟΘﾟ))-(c^_^o))+(((ﾟΘﾟ))+((o^_^o)))+(((o^_^o))-(c^_^o)))+(ﾟДﾟ)[ﾟεﾟ]+((((o^_^o))-(c^_^o))+(-(c^_^o)+((ﾟΘﾟ)))+(-(c^_^o)+((ﾟΘﾟ))))+((((o^_^o))-(c^_^o))+(((o^_^o))-(c^_^o)))+(ﾟДﾟ)[ﾟεﾟ]+((-(c^_^o)+((ﾟΘﾟ)))-(((ﾟΘﾟ))-((ﾟΘﾟ))))+((((o^_^o))-((o^_^o)))+(((o^_^o))+((ﾟΘﾟ))))+(-(((o^_^o))-(c^_^o))+((c^_^o)+(ﾟｰﾟ)))+(ﾟДﾟ)[ﾟεﾟ]+((-(c^_^o)+((o^_^o)))-(-((o^_^o))+(ﾟｰﾟ))-(-((o^_^o))+(ﾟｰﾟ)))+(-(-((o^_^o))+(ﾟｰﾟ))+(((o^_^o))-(c^_^o))+((c^_^o)+(ﾟｰﾟ)))+((((ﾟΘﾟ))-((o^_^o))+((ﾟΘﾟ))+(ﾟｰﾟ))-(((o^_^o))-((o^_^o))))+(ﾟДﾟ)[ﾟεﾟ]+(-(((ﾟΘﾟ))-((o^_^o))+((ﾟΘﾟ))+(ﾟｰﾟ))+(((ﾟΘﾟ))+((o^_^o))))+((-(c^_^o)+((o^_^o)))+((ﾟｰﾟ)+((ﾟΘﾟ))+((ﾟΘﾟ))-((o^_^o))))+(((ﾟｰﾟ)-((o^_^o)))+((c^_^o)+(ﾟｰﾟ))+((ﾟｰﾟ)-((o^_^o)))-(((o^_^o))-(c^_^o)))+(ﾟДﾟ)[ﾟεﾟ]+(((ﾟｰﾟ)+(c^_^o))-(((ﾟΘﾟ))-((o^_^o))+(ﾟｰﾟ)+((ﾟΘﾟ))))+(((ﾟｰﾟ)-(c^_^o))+(-((ﾟΘﾟ))-((ﾟΘﾟ))+((o^_^o))))+(-((ﾟｰﾟ)+((ﾟΘﾟ))+((ﾟΘﾟ))-((o^_^o)))+((c^_^o)+(ﾟｰﾟ)))+(ﾟДﾟ)[ﾟεﾟ]+(((ﾟｰﾟ)-(c^_^o))-(((ﾟΘﾟ))+((ﾟΘﾟ))-((o^_^o))+(ﾟｰﾟ)))+(((ﾟｰﾟ)-((o^_^o)))+(-(c^_^o)+((o^_^o))))+((((ﾟΘﾟ))+((o^_^o)))+(((ﾟΘﾟ))+((o^_^o)))-(((o^_^o))-((ﾟΘﾟ))-((ﾟΘﾟ))))+(ﾟДﾟ)[ﾟεﾟ]+(-(-((ﾟΘﾟ))-((ﾟΘﾟ))+((o^_^o)))+((ﾟｰﾟ)-((o^_^o))+((ﾟΘﾟ))+((ﾟΘﾟ)))-(-((ﾟΘﾟ))-((ﾟΘﾟ))+((o^_^o))))+((-(c^_^o)+((ﾟΘﾟ)))+(-(c^_^o)+((ﾟΘﾟ)))+(-((o^_^o))+(ﾟｰﾟ)+((ﾟΘﾟ))+((ﾟΘﾟ))))+((-((o^_^o))+(ﾟｰﾟ))+(-((o^_^o))+(ﾟｰﾟ))+((ﾟｰﾟ)+(c^_^o)))+(ﾟДﾟ)[ﾟεﾟ]+(-(-((o^_^o))+((o^_^o)))+((c^_^o)+(ﾟｰﾟ)))+(-(-(c^_^o)+((ﾟΘﾟ)))+((ﾟｰﾟ)-((o^_^o))))+(ﾟДﾟ)[ﾟεﾟ]+((((o^_^o))-((ﾟΘﾟ))-((ﾟΘﾟ)))+(((ﾟΘﾟ))+((o^_^o))))+(-(((o^_^o))-(c^_^o))+(((o^_^o))-(c^_^o)))+(ﾟДﾟ)[ﾟεﾟ]+((((o^_^o))+((ﾟΘﾟ)))-((c^_^o)-(c^_^o)))+(-((ﾟｰﾟ)-(c^_^o))+((ﾟｰﾟ)-(c^_^o)))+(ﾟДﾟ)[ﾟεﾟ]+((((o^_^o))+((ﾟΘﾟ)))-((ﾟｰﾟ)-(ﾟｰﾟ)))+(-(-(c^_^o)+((o^_^o)))+(-(c^_^o)+((ﾟΘﾟ)))+((c^_^o)+(ﾟｰﾟ)))+(ﾟДﾟ)[ﾟεﾟ]+((-(c^_^o)+((o^_^o)))-((ﾟｰﾟ)-((o^_^o)))+(((o^_^o))-(c^_^o)))+((-(c^_^o)+((o^_^o)))+(((ﾟΘﾟ))+((o^_^o))))+(ﾟДﾟ)[ﾟεﾟ]+((-((o^_^o))+(ﾟｰﾟ))-(((o^_^o))-((o^_^o))))+((-(c^_^o)+(ﾟｰﾟ))-(-((ﾟΘﾟ))+((o^_^o))-((ﾟΘﾟ)))+(((ﾟΘﾟ))+((ﾟΘﾟ))-((o^_^o))+(ﾟｰﾟ)))+((-((o^_^o))+(ﾟｰﾟ)+((ﾟΘﾟ))+((ﾟΘﾟ)))-(-((o^_^o))+((o^_^o))))+(ﾟДﾟ)[ﾟεﾟ]+((((ﾟΘﾟ))+((ﾟΘﾟ))+(ﾟｰﾟ)-((o^_^o)))-(((ﾟΘﾟ))-(c^_^o))-(-((o^_^o))+(ﾟｰﾟ)))+((-((ﾟΘﾟ))-((ﾟΘﾟ))+((o^_^o)))+(-(c^_^o)+(ﾟｰﾟ)))+((((o^_^o))-((ﾟΘﾟ))-((ﾟΘﾟ)))+((ﾟｰﾟ)+(c^_^o))+(-((ﾟΘﾟ))+((o^_^o))-((ﾟΘﾟ))))+(ﾟДﾟ)[ﾟεﾟ]+((((o^_^o))-(c^_^o))+(-((ﾟΘﾟ))-((ﾟΘﾟ))+((o^_^o)))+(((o^_^o))-((ﾟΘﾟ))-((ﾟΘﾟ))))+(((ﾟｰﾟ)-((o^_^o))+((ﾟΘﾟ))+((ﾟΘﾟ)))-(-((o^_^o))+(ﾟｰﾟ))+((ﾟｰﾟ)+((ﾟΘﾟ))-((o^_^o))+((ﾟΘﾟ))))+(ﾟДﾟ)[ﾟεﾟ]+((-(c^_^o)+(ﾟｰﾟ))+(((o^_^o))-(c^_^o))-(-(c^_^o)+((ﾟΘﾟ))))+(((ﾟｰﾟ)-((o^_^o)))+(-(c^_^o)+((o^_^o)))+(((o^_^o))-(c^_^o)))+(ﾟДﾟ)[ﾟεﾟ]+((((o^_^o))+((ﾟΘﾟ)))-(-(c^_^o)+((ﾟΘﾟ)))+((ﾟｰﾟ)+((ﾟΘﾟ))+((ﾟΘﾟ))-((o^_^o))))+(-(-((o^_^o))+(ﾟｰﾟ))-((ﾟｰﾟ)-((o^_^o)))+(((o^_^o))-(c^_^o)))+(ﾟДﾟ)[ﾟεﾟ]+(-(-((ﾟΘﾟ))+((o^_^o))-((ﾟΘﾟ)))-(-(c^_^o)+((ﾟΘﾟ)))+((ﾟｰﾟ)+((ﾟΘﾟ))+((ﾟΘﾟ))-((o^_^o))))+(((ﾟｰﾟ)-(c^_^o))+(-((ﾟΘﾟ))-((ﾟΘﾟ))+((o^_^o)))+(-((o^_^o))+(ﾟｰﾟ)))+(((ﾟｰﾟ)-(c^_^o))+(((ﾟΘﾟ))-(c^_^o)))+(ﾟДﾟ)[ﾟεﾟ]+((-((o^_^o))+(ﾟｰﾟ))+(-(c^_^o)+((ﾟΘﾟ)))+((c^_^o)+(ﾟｰﾟ)))+(((ﾟｰﾟ)-((o^_^o)))+((ﾟｰﾟ)+((ﾟΘﾟ))+((ﾟΘﾟ))-((o^_^o)))+(((o^_^o))-(c^_^o)))+(ﾟДﾟ)[ﾟεﾟ]+((((o^_^o))-(c^_^o))-((ﾟｰﾟ)-((o^_^o)))-(-((o^_^o))+(ﾟｰﾟ)))+((((ﾟΘﾟ))-(c^_^o))+((ﾟｰﾟ)+((ﾟΘﾟ))-((o^_^o))+((ﾟΘﾟ))))+((-(c^_^o)+(ﾟｰﾟ))+(-(c^_^o)+((o^_^o))))+(ﾟДﾟ)[ﾟεﾟ]+(((ﾟｰﾟ)-((o^_^o)))-(-(c^_^o)+(c^_^o)))+(((ﾟｰﾟ)-(c^_^o))+(-(ﾟｰﾟ)+(ﾟｰﾟ)))+((((ﾟΘﾟ))+(ﾟｰﾟ)+((ﾟΘﾟ))-((o^_^o)))+(((ﾟΘﾟ))+(ﾟｰﾟ)-((o^_^o))+((ﾟΘﾟ)))-(-(c^_^o)+((ﾟΘﾟ))))+(ﾟДﾟ)[ﾟεﾟ]+(((ﾟｰﾟ)-(c^_^o))+(-(c^_^o)+((ﾟΘﾟ)))+((ﾟｰﾟ)-((o^_^o))))+((((o^_^o))-(c^_^o))+(((ﾟΘﾟ))+((o^_^o)))-(-((o^_^o))+(ﾟｰﾟ)))+(ﾟДﾟ)[ﾟεﾟ]+((((o^_^o))-(c^_^o))+(-((ﾟΘﾟ))+((o^_^o))-((ﾟΘﾟ)))+((ﾟｰﾟ)+((ﾟΘﾟ))+((ﾟΘﾟ))-((o^_^o))))+((-((ﾟΘﾟ))-((ﾟΘﾟ))+((o^_^o)))-(((ﾟΘﾟ))-(c^_^o)))+(ﾟДﾟ)[ﾟεﾟ]+(-(-((o^_^o))+(ﾟｰﾟ))+(-((o^_^o))+((ﾟΘﾟ))+((ﾟΘﾟ))+(ﾟｰﾟ))+(-(c^_^o)+(ﾟｰﾟ)))+(((ﾟｰﾟ)-((o^_^o)))+(((o^_^o))+((ﾟΘﾟ)))-(((o^_^o))-(c^_^o))+(-((o^_^o))+(ﾟｰﾟ)))+(ﾟДﾟ)[ﾟεﾟ]+((-((o^_^o))+(ﾟｰﾟ))+((ﾟｰﾟ)-(c^_^o))+(-((ﾟΘﾟ))+((o^_^o))-((ﾟΘﾟ))))+((-(c^_^o)+((o^_^o)))-(-(c^_^o)+(c^_^o)))+(ﾟДﾟ)[ﾟεﾟ]+(-(((ﾟΘﾟ))-(c^_^o))-((ﾟｰﾟ)-((o^_^o)))+(-(c^_^o)+((o^_^o))))+((-(c^_^o)+((o^_^o)))+(((ﾟΘﾟ))+((ﾟΘﾟ))+(ﾟｰﾟ)-((o^_^o))))+((((ﾟΘﾟ))+((ﾟΘﾟ))-((o^_^o))+(ﾟｰﾟ))-((c^_^o)-(c^_^o)))+(ﾟДﾟ)[ﾟεﾟ]+((-(c^_^o)+((o^_^o)))+(-((o^_^o))+(ﾟｰﾟ)+((ﾟΘﾟ))+((ﾟΘﾟ))))+((-((o^_^o))+(ﾟｰﾟ))+(((ﾟΘﾟ))-((o^_^o))+((ﾟΘﾟ))+(ﾟｰﾟ)))+(ﾟДﾟ)[ﾟεﾟ]+((-((o^_^o))+(ﾟｰﾟ))+(-(c^_^o)+((o^_^o)))+(-((o^_^o))+(ﾟｰﾟ)))+(-(-((ﾟΘﾟ))-((ﾟΘﾟ))+((o^_^o)))+(-(c^_^o)+((o^_^o)))+((ﾟｰﾟ)+((ﾟΘﾟ))-((o^_^o))+((ﾟΘﾟ))))+(ﾟДﾟ)[ﾟεﾟ]+(((ﾟｰﾟ)+((ﾟΘﾟ))-((o^_^o))+((ﾟΘﾟ)))+((c^_^o)+(ﾟｰﾟ))-(-((ﾟΘﾟ))-((ﾟΘﾟ))+((o^_^o))))+(-(-((o^_^o))+(ﾟｰﾟ))+(((ﾟΘﾟ))-((o^_^o))+((ﾟΘﾟ))+(ﾟｰﾟ)))+(ﾟДﾟ)[ﾟεﾟ]+((((o^_^o))-(c^_^o))+(((o^_^o))-(c^_^o)))+((-(c^_^o)+((ﾟΘﾟ)))+(((ﾟΘﾟ))-((o^_^o))+(ﾟｰﾟ)+((ﾟΘﾟ)))+(((ﾟΘﾟ))-(c^_^o)))+(ﾟДﾟ)[ﾟεﾟ]+(-(((o^_^o))-((ﾟΘﾟ))-((ﾟΘﾟ)))+(((ﾟΘﾟ))+(ﾟｰﾟ)-((o^_^o))+((ﾟΘﾟ)))+(-(c^_^o)+((o^_^o))))+((-((o^_^o))+(ﾟｰﾟ)+((ﾟΘﾟ))+((ﾟΘﾟ)))-(-((ﾟΘﾟ))+((o^_^o))-((ﾟΘﾟ)))+(((o^_^o))-(c^_^o)))+(ﾟДﾟ)[ﾟεﾟ]+(-(((o^_^o))-((ﾟΘﾟ))-((ﾟΘﾟ)))+((c^_^o)+(ﾟｰﾟ))+(-(c^_^o)+(ﾟｰﾟ)))+(-(-((o^_^o))+((o^_^o)))+(((ﾟΘﾟ))-((ﾟΘﾟ))))+(ﾟДﾟ)[ﾟεﾟ]+((-(c^_^o)+((o^_^o)))+(-((ﾟΘﾟ))+((o^_^o))-((ﾟΘﾟ)))+((ﾟｰﾟ)+((ﾟΘﾟ))+((ﾟΘﾟ))-((o^_^o))))+(-(-(c^_^o)+((o^_^o)))+(-(c^_^o)+((o^_^o))))+(ﾟДﾟ)[ﾟεﾟ]+((-((o^_^o))+((ﾟΘﾟ))+(ﾟｰﾟ)+((ﾟΘﾟ)))+((ﾟｰﾟ)-((o^_^o)))+(-((o^_^o))+(ﾟｰﾟ)))+(-(((ﾟΘﾟ))-(c^_^o))+(-(c^_^o)+(ﾟｰﾟ))+(((ﾟΘﾟ))-((o^_^o))+(ﾟｰﾟ)+((ﾟΘﾟ))))+(ﾟДﾟ)[ﾟεﾟ]+(-(-((ﾟΘﾟ))-((ﾟΘﾟ))+((o^_^o)))-(-((ﾟΘﾟ))+((o^_^o))-((ﾟΘﾟ)))+(-(c^_^o)+((o^_^o))))+((((ﾟΘﾟ))-(c^_^o))+((ﾟｰﾟ)-(c^_^o)))+(-(((ﾟΘﾟ))-(c^_^o))+(-(c^_^o)+((ﾟΘﾟ))))+(ﾟДﾟ)[ﾟεﾟ]+(-(-(c^_^o)+((o^_^o)))+((ﾟｰﾟ)-(c^_^o)))+(-(-(c^_^o)+((ﾟΘﾟ)))+(-(c^_^o)+(ﾟｰﾟ))+(((ﾟΘﾟ))+((ﾟΘﾟ))+(ﾟｰﾟ)-((o^_^o))))+((((ﾟΘﾟ))+((o^_^o)))-(-(c^_^o)+(c^_^o)))+(ﾟДﾟ)[ﾟεﾟ]+(-(-((o^_^o))+(ﾟｰﾟ))-(((o^_^o))-((ﾟΘﾟ))-((ﾟΘﾟ)))+(-(c^_^o)+((o^_^o))))+((-(c^_^o)+(ﾟｰﾟ))+(((ﾟΘﾟ))-(c^_^o)))+((-((o^_^o))+(ﾟｰﾟ))+(((ﾟΘﾟ))+((o^_^o))))+(ﾟДﾟ)[ﾟεﾟ]+(-(((o^_^o))-((o^_^o)))+((ﾟｰﾟ)-((o^_^o))))+((((ﾟΘﾟ))-((o^_^o))+((ﾟΘﾟ))+(ﾟｰﾟ))+(((o^_^o))-(c^_^o))-(((ﾟΘﾟ))-(c^_^o)))+(((ﾟｰﾟ)+(c^_^o))+(((o^_^o))-((o^_^o))))+(ﾟДﾟ)[ﾟεﾟ]+(((c^_^o)-(c^_^o))+((ﾟｰﾟ)-(c^_^o)))+(((ﾟｰﾟ)-(c^_^o))-(((ﾟΘﾟ))-((o^_^o))+((ﾟΘﾟ))+(ﾟｰﾟ))+(-(c^_^o)+((ﾟΘﾟ))))+(ﾟДﾟ)[ﾟεﾟ]+((-((ﾟΘﾟ))-((ﾟΘﾟ))+((o^_^o)))+(((o^_^o))-(c^_^o)))+(-((c^_^o)+(ﾟｰﾟ))+((ﾟｰﾟ)+(c^_^o)))+(ﾟДﾟ)[ﾟεﾟ]+((((ﾟΘﾟ))-(c^_^o))+(-(c^_^o)+(ﾟｰﾟ)))+((-(c^_^o)+((ﾟΘﾟ)))-(((ﾟΘﾟ))-((ﾟΘﾟ))))+(ﾟДﾟ)[ﾟεﾟ]+((-(c^_^o)+(ﾟｰﾟ))+(((ﾟΘﾟ))-((ﾟΘﾟ))))+((((o^_^o))-((ﾟΘﾟ))-((ﾟΘﾟ)))-(-((o^_^o))+(ﾟｰﾟ)))+((ﾟДﾟ ))[ﾟoﾟ])((ﾟΘﾟ)))('_');"""
+        puzzleop = """ ﾟωﾟﾉ= /｀ｍ´）ﾉ ~┻━┻   //*´∇｀*/ ['_']; o=(ﾟｰﾟ)  =_=3; c=(ﾟΘﾟ) =(ﾟｰﾟ)-(ﾟｰﾟ); (ﾟДﾟ) =(ﾟΘﾟ)= (o^_^o)/ (o^_^o);(ﾟДﾟ)={ﾟΘﾟ: '_' ,ﾟωﾟﾉ : ((ﾟωﾟﾉ==3) +'_') [ﾟΘﾟ] ,ﾟｰﾟﾉ :(ﾟωﾟﾉ+ '_')[o^_^o -(ﾟΘﾟ)] ,ﾟДﾟﾉ:((ﾟｰﾟ==3) +'_')[ﾟｰﾟ] }; (ﾟДﾟ) [ﾟΘﾟ] =((ﾟωﾟﾉ==3) +'_') [c^_^o];(ﾟДﾟ) ['c'] = ((ﾟДﾟ)+'_') [ (ﾟｰﾟ)+(ﾟｰﾟ)-(ﾟΘﾟ) ];(ﾟДﾟ) ['o'] = ((ﾟДﾟ)+'_') [ﾟΘﾟ];(ﾟoﾟ)=(ﾟДﾟ) ['c']+(ﾟДﾟ) ['o']+(ﾟωﾟﾉ +'_')[ﾟΘﾟ]+ ((ﾟωﾟﾉ==3) +'_') [ﾟｰﾟ] + ((ﾟДﾟ) +'_') [(ﾟｰﾟ)+(ﾟｰﾟ)]+ ((ﾟｰﾟ==3) +'_') [ﾟΘﾟ]+((ﾟｰﾟ==3) +'_') [(ﾟｰﾟ) - (ﾟΘﾟ)]+(ﾟДﾟ) ['c']+((ﾟДﾟ)+'_') [(ﾟｰﾟ)+(ﾟｰﾟ)]+ (ﾟДﾟ) ['o']+((ﾟｰﾟ==3) +'_') [ﾟΘﾟ];(ﾟДﾟ) ['_'] =(o^_^o) [ﾟoﾟ] [ﾟoﾟ];(ﾟεﾟ)=((ﾟｰﾟ==3) +'_') [ﾟΘﾟ]+ (ﾟДﾟ) .ﾟДﾟﾉ+((ﾟДﾟ)+'_') [(ﾟｰﾟ) + (ﾟｰﾟ)]+((ﾟｰﾟ==3) +'_') [o^_^o -ﾟΘﾟ]+((ﾟｰﾟ==3) +'_') [ﾟΘﾟ]+ (ﾟωﾟﾉ +'_') [ﾟΘﾟ]; (ﾟｰﾟ)+=(ﾟΘﾟ); (ﾟДﾟ)[ﾟεﾟ]='\\'; (ﾟДﾟ).ﾟΘﾟﾉ=(ﾟДﾟ+ ﾟｰﾟ)[o^_^o -(ﾟΘﾟ)];(oﾟｰﾟo)=(ﾟωﾟﾉ +'_')[c^_^o];(ﾟДﾟ) [ﾟoﾟ]='\"';(ﾟДﾟ) ['_'] ( (ﾟДﾟ) ['_'] (ﾟεﾟ+(ﾟДﾟ)[ﾟoﾟ]+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ ((o^_^o) +(o^_^o) +(c^_^o))+ ((ﾟｰﾟ) + (o^_^o))+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ ((ﾟｰﾟ) + (ﾟΘﾟ))+ (-~0)+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ ((ﾟｰﾟ) + (ﾟΘﾟ))+ ((o^_^o) +(o^_^o) +(c^_^o))+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ (-~3)+ (-~3)+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ ((ﾟｰﾟ) + (ﾟΘﾟ))+ ((ﾟｰﾟ) + (o^_^o))+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ ((o^_^o) +(o^_^o) +(c^_^o))+ ((ﾟｰﾟ) + (o^_^o))+ (ﾟДﾟ)[ﾟεﾟ]+((ﾟｰﾟ) + (ﾟΘﾟ))+ ((o^_^o) +(o^_^o) +(c^_^o))+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ ((o^_^o) +(o^_^o) +(c^_^o))+ (-~1)+ (ﾟДﾟ)[ﾟεﾟ]+((ﾟｰﾟ) + (o^_^o))+ ((ﾟｰﾟ) + (ﾟΘﾟ))+ (ﾟДﾟ)[ﾟεﾟ]+(-~3)+ ((ﾟｰﾟ) + (o^_^o))+ (ﾟДﾟ)[ﾟεﾟ]+((o^_^o) +(o^_^o) +(c^_^o))+ ((c^_^o)-(c^_^o))+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ (-~3)+ (-~0)+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ (-~3)+ (-~1)+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ ((c^_^o)-(c^_^o))+ (-~-~1)+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ ((ﾟｰﾟ) + (o^_^o))+ ((c^_^o)-(c^_^o))+ (ﾟДﾟ)[ﾟεﾟ]+((o^_^o) +(o^_^o) +(c^_^o))+ (-~-~1)+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ ((o^_^o) +(o^_^o) +(c^_^o))+ (-~0)+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ ((ﾟｰﾟ) + (ﾟΘﾟ))+ ((ﾟｰﾟ) + (ﾟΘﾟ))+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ (-~0)+ ((ﾟｰﾟ) + (o^_^o))+ (ﾟДﾟ)[ﾟεﾟ]+(-~0)+ ((ﾟｰﾟ) + (ﾟΘﾟ))+ ((c^_^o)-(c^_^o))+ (ﾟДﾟ)[ﾟεﾟ]+(-~3)+ ((ﾟｰﾟ) + (o^_^o))+ (ﾟДﾟ)[ﾟεﾟ]+((ﾟｰﾟ) + (o^_^o))+ (-~-~1)+ (ﾟДﾟ)[ﾟoﾟ]) (ﾟΘﾟ)) ('_');"""
+        puzzle = speedvid
+        functionCode = transOpenloadPuzzle(puzzle)
 
-        puzzle = re.sub(dic_pat1, "'[object object]_'", puzzle)
-        puzzle = re.sub(dic_pat2, lambda x: "('[object object]'+str((%s)))" % x.group(1), puzzle)
-        puzzle = re.sub(dic_pat3, lambda x: "(%s)['%s']" % (dicId, x.group(1)), puzzle)
-        puzzle = re.sub(dic_pat4, lambda x: "'%s'" % x.group(1), puzzle)
-
-        pat_str1 = r"\((\(.+?\)|[A-Z])\+\'_\'\)"
-        pat_str2 = r"\([^()]+\)\[[A-Z]\]\[[A-Z]\]"
-        pat_str3 = r"(?<=;)([^+]+)\+=([^;]+)"
-
-        puzzle = re.sub(pat_str1, lambda x: "(str((%s))+'_')" % x.group(1), puzzle)
-        puzzle = re.sub(pat_str2, "'function'", puzzle)
-        puzzle = re.sub(pat_str3, lambda x: "%s=%s+%s" % (x.group(1), x.group(1), x.group(2)), puzzle)
-
-        codeGlb = {}
-        functionCode = []
-        puzzle = """U=/~//**/[\'_\'];o=(F)=_=3;c=(C)=(F)-(F);(E)=(C)=(o^_^o)/(o^_^o);(E)={\'C\':\'_\',\'U\':(str(((U==3)))+\'_\')[C],\'F\':(str((U))+\'_\')[o^_^o-(C)],\'E\':(str(((F==3)))+\'_\')[F]};(E)[C]=(str(((U==3)))+\'_\')[c^_^o];(E)[\'c\']=\'[object object]_\'[(F)+(F)-(C)];(E)[\'o\']=\'[object object]_\'[C];(B)=(E)[\'c\']+(E)[\'o\']+(str((U))+\'_\')[C]+(str(((U==3)))+\'_\')[F]+\'[object object]_\'[(F)+(F)]+(str(((F==3)))+\'_\')[C]+(str(((F==3)))+\'_\')[(F)-(C)]+(E)[\'c\']+\'[object object]_\'[(F)+(F)]+(E)[\'o\']+(str(((F==3)))+\'_\')[C];(E)[\'_\']=\'function\';(D)=(str(((F==3)))+\'_\')[C]+(E)[\'E\']+\'[object object]_\'[(F)+(F)]+(str(((F==3)))+\'_\')[o^_^o-C]+(str(((F==3)))+\'_\')[C]+(str((U))+\'_\')[C];(F)=(F)+(C);(E)[D]=\'\\\\\';(E)[\'C\']=(\'[object object]\'+str((F)))[o^_^o-(C)];(A)=(str((U))+\'_\')[c^_^o];(E)[B]=\'\\"\';(E)[\'_\']((E)[\'_\'](D+(E)[B]+(E)[D]+(-~3)+(-~3)+(E)[D]+((F)+(C))+((c^_^o)-(c^_^o))+(E)[D]+(-~3)+(-~1)+(E)[D]+(-~3)+(-~-~1)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+(-~3)+(-~3)+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~1)+(E)[D]+(-~0)+((F)+(C))+(-~3)+(E)[D]+(-~0)+(-~3)+(-~0)+(E)[D]+(-~0)+((F)+(o^_^o))+(-~0)+(E)[D]+((F)+(C))+(-~3)+(E)[D]+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+(-~0)+((F)+(C))+(-~3)+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+((F)+(C))+(-~3)+(E)[D]+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((F)+(C))+(-~3)+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+(-~3)+((F)+(o^_^o))+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+(-~3)+(-~-~1)+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+(-~0)+(-~3)+(-~0)+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~1)+(E)[D]+(-~3)+(-~1)+(E)[D]+((F)+(C))+(-~0)+(E)[D]+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+(-~3)+(-~-~1)+(E)[D]+(-~0)+((F)+(C))+(-~3)+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+(-~3)+(-~-~1)+(E)[D]+(-~0)+((F)+(C))+(-~-~1)+(E)[D]+((F)+(C))+((c^_^o)-(c^_^o))+(E)[D]+(-~0)+(-~3)+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+((F)+(C))+(E)[D]+(-~0)+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+(-~3)+(-~-~1)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+((F)+(C))+((c^_^o)-(c^_^o))+(E)[D]+((F)+(C))+(-~0)+(E)[D]+(-~0)+((F)+(o^_^o))+(-~-~1)+(E)[D]+(-~0)+(-~1)+(E)[D]+(-~0)+(-~0)+(E)[D]+(-~0)+(-~0)+(E)[D]+(-~0)+(-~0)+(E)[D]+(-~0)+(-~0)+(E)[D]+(-~3)+(-~3)+(E)[D]+((F)+(C))+((c^_^o)-(c^_^o))+(E)[D]+(-~3)+(-~1)+(E)[D]+(-~3)+(-~-~1)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+(-~3)+(-~3)+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~1)+(E)[D]+(-~0)+((F)+(C))+(-~3)+(E)[D]+(-~0)+(-~3)+(-~0)+(E)[D]+(-~0)+((F)+(o^_^o))+(-~0)+(E)[D]+((F)+(C))+(-~3)+(E)[D]+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+(-~0)+((F)+(C))+(-~3)+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+((F)+(C))+(-~3)+(E)[D]+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((F)+(C))+(-~3)+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+(-~3)+((F)+(o^_^o))+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+(-~3)+(-~-~1)+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+(-~0)+(-~3)+(-~0)+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~1)+(E)[D]+(-~3)+(-~1)+(E)[D]+((F)+(C))+(-~0)+(E)[D]+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((F)+(C))+((c^_^o)-(c^_^o))+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+(-~3)+(-~3)+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+((F)+(C))+((c^_^o)-(c^_^o))+(E)[D]+((F)+(C))+(-~0)+(E)[D]+((F)+(o^_^o))+(-~-~1)+(E)[D]+(-~0)+(-~1)+(E)[D]+(-~0)+(-~0)+(E)[D]+(-~0)+(-~0)+(E)[D]+(-~0)+(-~0)+(E)[D]+(-~0)+(-~0)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+(-~3)+(-~0)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~1)+(E)[D]+(-~3)+((c^_^o)-(c^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~-~1)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~1)+(E)[D]+(-~0)+(-~3)+(-~-~1)+(E)[D]+(-~0)+((F)+(C))+(-~3)+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((F)+(C))+(-~-~1)+(E)[D]+(-~3)+((c^_^o)-(c^_^o))+(E)[D]+((F)+(o^_^o))+((F)+(C))+(E)[D]+(-~3)+((c^_^o)-(c^_^o))+(E)[D]+(-~3)+(-~1)+(E)[D]+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~-~1)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~1)+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+(-~0)+(-~3)+(-~0)+(E)[D]+(-~0)+((F)+(C))+((F)+(C))+(E)[D]+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~3)+(-~1)+(E)[D]+(-~3)+((c^_^o)-(c^_^o))+(E)[D]+((F)+(C))+(-~-~1)+(E)[D]+(-~3)+((c^_^o)-(c^_^o))+(E)[D]+(-~3)+(-~3)+(E)[D]+((F)+(C))+((c^_^o)-(c^_^o))+(E)[D]+(-~3)+(-~1)+(E)[D]+(-~3)+(-~-~1)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~-~1)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~1)+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+(-~0)+(-~3)+(-~0)+(E)[D]+(-~0)+((F)+(C))+((F)+(C))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+((F)+(C))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~1)+(E)[D]+(-~0)+((F)+(C))+(-~3)+(E)[D]+(-~3)+(-~1)+(E)[D]+((F)+(C))+(-~0)+(E)[D]+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+(-~0)+((F)+(o^_^o))+((c^_^o)-(c^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+((F)+(C))+((c^_^o)-(c^_^o))+(E)[D]+((F)+(C))+(-~0)+(E)[D]+(-~3)+((c^_^o)-(c^_^o))+(E)[D]+((F)+(C))+(-~-~1)+(E)[D]+(-~3)+((c^_^o)-(c^_^o))+(E)[D]+(-~3)+(-~1)+(E)[D]+((F)+(o^_^o))+((F)+(o^_^o))+(E)[D]+(-~0)+((F)+(C))+((F)+(C))+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+((F)+(C))+((F)+(C))+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+((F)+(o^_^o))+((F)+(C))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~1)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+((F)+(C))+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+(-~3)+(-~1)+(E)[D]+((F)+(o^_^o))+(-~-~1)+(E)[D]+(-~0)+(-~1)+(E)[D]+(-~0)+(-~0)+(E)[D]+(-~0)+(-~0)+(E)[D]+(-~0)+(-~0)+(E)[D]+(-~0)+(-~0)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+(-~3)+(-~3)+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+((F)+(C))+(-~1)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~-~1)+(E)[D]+((F)+(C))+((c^_^o)-(c^_^o))+(E)[D]+(-~3)+(-~1)+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+((F)+(C))+(-~3)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+(-~3)+(-~3)+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~3)+(-~1)+(E)[D]+((F)+(C))+(-~0)+(E)[D]+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~-~1)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~1)+(E)[D]+(-~0)+(-~3)+(-~-~1)+(E)[D]+((F)+(C))+((c^_^o)-(c^_^o))+(E)[D]+(-~0)+((F)+(o^_^o))+(-~-~1)+(E)[D]+(-~3)+((c^_^o)-(c^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+(-~0)+((F)+(o^_^o))+(-~0)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+((c^_^o)-(c^_^o))+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+((F)+(o^_^o))+(-~1)+(E)[D]+(-~3)+((c^_^o)-(c^_^o))+(E)[D]+(-~3)+(-~1)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+(-~3)+(-~3)+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+((F)+(C))+((F)+(C))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+((c^_^o)-(c^_^o))+(E)[D]+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+(-~3)+(-~1)+(E)[D]+((F)+(C))+(-~3)+(E)[D]+(-~3)+((c^_^o)-(c^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~-~1)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~1)+(E)[D]+(-~0)+(-~3)+(-~-~1)+(E)[D]+((F)+(o^_^o))+(-~1)+(E)[D]+(-~3)+((c^_^o)-(c^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~-~1)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~1)+(E)[D]+(-~0)+(-~3)+(-~-~1)+(E)[D]+(-~0)+((F)+(C))+(-~3)+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((F)+(C))+(-~-~1)+(E)[D]+(-~0)+((F)+(o^_^o))+((F)+(C))+(E)[D]+((F)+(C))+(-~0)+(E)[D]+((F)+(o^_^o))+(-~-~1)+(E)[D]+(-~0)+((F)+(o^_^o))+((F)+(C))+(E)[D]+((F)+(C))+(-~0)+(E)[D]+((F)+(o^_^o))+(-~-~1)+(E)[B];"""
-        code = puzzle[:-1].split(';')
-        var_zero = puzzle[0]
-        var_dict = re.search(r'\(([A-Z])\)=\{', puzzle)
-        var_dict = var_dict.group(1)
-        PATT_BEGIN = "(%s)['_'](" % var_dict
-        PATT_END = "%s=/~//**/[\'_\']" % var_zero
-        for linea in code:
-            if not linea.startswith(PATT_BEGIN):
-                if linea.endswith(PATT_END):
-                    linea = linea.replace(PATT_END, "%s='undefined'" % var_zero)
-                linea = re.sub(r"\(([A-Z]+)\)", lambda x: x.group(1), linea)
-                linea = linea.encode('utf-8')
-                varss = re.split(r"(?<=[_a-zA-Z\]])=(?=[^=])",linea)
-                value = eval(varss.pop(), codeGlb)
-                for var in varss:
-                    m = re.match(r"([^\[]+)\[([^\]]+)\]", var)
-                    if m:
-                        var, key = m.groups()
-                        key = eval(key, codeGlb)
-                        codeGlb[var][key] = value
-                    else:
-                        codeGlb[var] = value
-            else:
-                while re.search(r"-~([0-9]+)", linea):
-                    linea = re.sub(r"-~([0-9]+)", lambda x: "%s" % (int(x.group(1)) + 1), linea)
-                linea = re.sub(r"\(([A-Z]+)\)", lambda x: x.group(1), linea)
-                linea = re.sub(r"\([oc]\^_\^o\)", lambda x: "%s" % eval(x.group(), codeGlb), linea)
-                while re.search(r"\([^)\]'\[(]+\)", linea):
-                    linea = re.sub(r"\([^)\]'\[(]+\)", lambda x: "%s" % eval(x.group(), codeGlb), linea)
-                linea = re.sub(r"[A-Z](?=[^\]\[])", lambda x: "%s" % eval(x.group(), codeGlb), linea)
-                linea = re.sub(r"E\[[\'_A-Za-z]+\]", lambda x: "%s" % eval(x.group(), codeGlb), linea)
-                linea = linea.replace('+', '')
-                linea = linea.decode('unicode-escape')
-                if linea.find(u'\u01c3') != -1:
-                    linea = linea.replace(u'\u01c3', 'oddFun')
-                    m = re.search(r'b.toString\(a\+([0-9]+)\)', linea)
-                    base = int(m.group(1))
-                    linea = re.sub(r"oddFun\(([0-9]+),([0-9]+)\)", lambda x: '"' + intBaseN(int(x.group(2)), base + int(x.group(1))) + '"', linea)
-                    linea = re.sub(r'"\+"', lambda x: '', linea)
-                functionCode.append(linea)
+    #     puzzle = puzzle.replace(' ', '')
+    #     pat_vars = r'(\(+([^=)(]+)\)+) *='
+    #     puzzle = re.sub(pat_vars, lambda x: x.group(0).replace(x.group(1), '(%s)' % x.group(2)), puzzle)
+    #
+    #     pat_vars = r'\(([^=)(]+)\) *='
+    #     vars = sorted(set(re.findall(pat_vars, puzzle)))
+    #     keys1 = re.findall(r'[,{] *(?P<key>[^: ]+) *:', puzzle)
+    #     keys2 = re.findall(r"\(ﾟДﾟ\) *\[[^']+\] *=", puzzle)
+    #     keys = sorted(set(keys1 + keys2))
+    #     totVars = vars + keys
+    #     for k in range(len(vars)):
+    #         puzzle = puzzle.replace(vars[k], varTags[k])
+    #     for k in range(len(keys)):
+    #         puzzle = puzzle.replace(keys[k], varTags[-k - 1])
+    # #     puzzle = puzzle.replace('\xef\xbe\x89'.decode('utf-8'), '').replace(' ','')
+    #     puzzle = re.sub(r'[ \x80-\xff]','',puzzle)
+    #     pat_dicId = r'\(+([A-Z])\)+={'
+    #     m = re.search(pat_dicId, puzzle)
+    #     assert m, 'No se encontro Id del diccionario'
+    #     dicId = m.group(1)
+    # #     pat_obj = r"\(\(%s\)\+\\'_\\'\)" % dicId
+    #     dic_pat1 = r"\(\(%s\)\+\'_\'\)" % dicId
+    #     dic_pat2 = r"\(%s\+([^+)]+)\)" % dicId
+    #     dic_pat3 = r"\(%s\)\.(.+?)\b" % dicId
+    #     dic_pat4 = r"(?<=[{,])([^: ]+)(?=:)"
+    #
+    #     puzzle = re.sub(dic_pat1, "'[object object]_'", puzzle)
+    #     puzzle = re.sub(dic_pat2, lambda x: "('[object object]'+str((%s)))" % x.group(1), puzzle)
+    #     puzzle = re.sub(dic_pat3, lambda x: "(%s)['%s']" % (dicId, x.group(1)), puzzle)
+    #     puzzle = re.sub(dic_pat4, lambda x: "'%s'" % x.group(1), puzzle)
+    #
+    #     pat_str1 = r"\((\([^()]+\)|[A-Z])\+\'_\'\)"
+    #     pat_str2 = r"\([^()]+\)\[[A-Z]\]\[[A-Z]\]"
+    #     pat_str3 = r"(?<=;)([^+]+)\+=([^;]+)"
+    #
+    #     puzzle = re.sub(pat_str1, lambda x: x.group().replace(x.group(1),'str((%s))' % x.group(1)), puzzle)
+    #     puzzle = re.sub(pat_str2, "'function'", puzzle)
+    #     puzzle = re.sub(pat_str3, lambda x: "%s=%s+%s" % (x.group(1), x.group(1), x.group(2)), puzzle)
+    #
+    #     codeGlb = {}
+    #     functionCode = []
+    #     # puzzle = """U=/~//**/[\'_\'];o=(F)=_=3;c=(C)=(F)-(F);(E)=(C)=(o^_^o)/(o^_^o);(E)={\'C\':\'_\',\'U\':(str(((U==3)))+\'_\')[C],\'F\':(str((U))+\'_\')[o^_^o-(C)],\'E\':(str(((F==3)))+\'_\')[F]};(E)[C]=(str(((U==3)))+\'_\')[c^_^o];(E)[\'c\']=\'[object object]_\'[(F)+(F)-(C)];(E)[\'o\']=\'[object object]_\'[C];(B)=(E)[\'c\']+(E)[\'o\']+(str((U))+\'_\')[C]+(str(((U==3)))+\'_\')[F]+\'[object object]_\'[(F)+(F)]+(str(((F==3)))+\'_\')[C]+(str(((F==3)))+\'_\')[(F)-(C)]+(E)[\'c\']+\'[object object]_\'[(F)+(F)]+(E)[\'o\']+(str(((F==3)))+\'_\')[C];(E)[\'_\']=\'function\';(D)=(str(((F==3)))+\'_\')[C]+(E)[\'E\']+\'[object object]_\'[(F)+(F)]+(str(((F==3)))+\'_\')[o^_^o-C]+(str(((F==3)))+\'_\')[C]+(str((U))+\'_\')[C];(F)=(F)+(C);(E)[D]=\'\\\\\';(E)[\'C\']=(\'[object object]\'+str((F)))[o^_^o-(C)];(A)=(str((U))+\'_\')[c^_^o];(E)[B]=\'\\"\';(E)[\'_\']((E)[\'_\'](D+(E)[B]+(E)[D]+(-~3)+(-~3)+(E)[D]+((F)+(C))+((c^_^o)-(c^_^o))+(E)[D]+(-~3)+(-~1)+(E)[D]+(-~3)+(-~-~1)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+(-~3)+(-~3)+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~1)+(E)[D]+(-~0)+((F)+(C))+(-~3)+(E)[D]+(-~0)+(-~3)+(-~0)+(E)[D]+(-~0)+((F)+(o^_^o))+(-~0)+(E)[D]+((F)+(C))+(-~3)+(E)[D]+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+(-~0)+((F)+(C))+(-~3)+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+((F)+(C))+(-~3)+(E)[D]+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((F)+(C))+(-~3)+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+(-~3)+((F)+(o^_^o))+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+(-~3)+(-~-~1)+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+(-~0)+(-~3)+(-~0)+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~1)+(E)[D]+(-~3)+(-~1)+(E)[D]+((F)+(C))+(-~0)+(E)[D]+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+(-~3)+(-~-~1)+(E)[D]+(-~0)+((F)+(C))+(-~3)+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+(-~3)+(-~-~1)+(E)[D]+(-~0)+((F)+(C))+(-~-~1)+(E)[D]+((F)+(C))+((c^_^o)-(c^_^o))+(E)[D]+(-~0)+(-~3)+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+((F)+(C))+(E)[D]+(-~0)+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+(-~3)+(-~-~1)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+((F)+(C))+((c^_^o)-(c^_^o))+(E)[D]+((F)+(C))+(-~0)+(E)[D]+(-~0)+((F)+(o^_^o))+(-~-~1)+(E)[D]+(-~0)+(-~1)+(E)[D]+(-~0)+(-~0)+(E)[D]+(-~0)+(-~0)+(E)[D]+(-~0)+(-~0)+(E)[D]+(-~0)+(-~0)+(E)[D]+(-~3)+(-~3)+(E)[D]+((F)+(C))+((c^_^o)-(c^_^o))+(E)[D]+(-~3)+(-~1)+(E)[D]+(-~3)+(-~-~1)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+(-~3)+(-~3)+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~1)+(E)[D]+(-~0)+((F)+(C))+(-~3)+(E)[D]+(-~0)+(-~3)+(-~0)+(E)[D]+(-~0)+((F)+(o^_^o))+(-~0)+(E)[D]+((F)+(C))+(-~3)+(E)[D]+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+(-~0)+((F)+(C))+(-~3)+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+((F)+(C))+(-~3)+(E)[D]+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((F)+(C))+(-~3)+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+(-~3)+((F)+(o^_^o))+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+(-~3)+(-~-~1)+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+(-~0)+(-~3)+(-~0)+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~1)+(E)[D]+(-~3)+(-~1)+(E)[D]+((F)+(C))+(-~0)+(E)[D]+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((F)+(C))+((c^_^o)-(c^_^o))+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+(-~3)+(-~3)+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+((F)+(C))+((c^_^o)-(c^_^o))+(E)[D]+((F)+(C))+(-~0)+(E)[D]+((F)+(o^_^o))+(-~-~1)+(E)[D]+(-~0)+(-~1)+(E)[D]+(-~0)+(-~0)+(E)[D]+(-~0)+(-~0)+(E)[D]+(-~0)+(-~0)+(E)[D]+(-~0)+(-~0)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+(-~3)+(-~0)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~1)+(E)[D]+(-~3)+((c^_^o)-(c^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~-~1)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~1)+(E)[D]+(-~0)+(-~3)+(-~-~1)+(E)[D]+(-~0)+((F)+(C))+(-~3)+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((F)+(C))+(-~-~1)+(E)[D]+(-~3)+((c^_^o)-(c^_^o))+(E)[D]+((F)+(o^_^o))+((F)+(C))+(E)[D]+(-~3)+((c^_^o)-(c^_^o))+(E)[D]+(-~3)+(-~1)+(E)[D]+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~-~1)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~1)+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+(-~0)+(-~3)+(-~0)+(E)[D]+(-~0)+((F)+(C))+((F)+(C))+(E)[D]+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~3)+(-~1)+(E)[D]+(-~3)+((c^_^o)-(c^_^o))+(E)[D]+((F)+(C))+(-~-~1)+(E)[D]+(-~3)+((c^_^o)-(c^_^o))+(E)[D]+(-~3)+(-~3)+(E)[D]+((F)+(C))+((c^_^o)-(c^_^o))+(E)[D]+(-~3)+(-~1)+(E)[D]+(-~3)+(-~-~1)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~-~1)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~1)+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+(-~0)+(-~3)+(-~0)+(E)[D]+(-~0)+((F)+(C))+((F)+(C))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+((F)+(C))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~1)+(E)[D]+(-~0)+((F)+(C))+(-~3)+(E)[D]+(-~3)+(-~1)+(E)[D]+((F)+(C))+(-~0)+(E)[D]+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+(-~0)+((F)+(o^_^o))+((c^_^o)-(c^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+((F)+(C))+((c^_^o)-(c^_^o))+(E)[D]+((F)+(C))+(-~0)+(E)[D]+(-~3)+((c^_^o)-(c^_^o))+(E)[D]+((F)+(C))+(-~-~1)+(E)[D]+(-~3)+((c^_^o)-(c^_^o))+(E)[D]+(-~3)+(-~1)+(E)[D]+((F)+(o^_^o))+((F)+(o^_^o))+(E)[D]+(-~0)+((F)+(C))+((F)+(C))+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+((F)+(C))+((F)+(C))+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+((F)+(o^_^o))+((F)+(C))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~1)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+((F)+(C))+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+(-~3)+(-~1)+(E)[D]+((F)+(o^_^o))+(-~-~1)+(E)[D]+(-~0)+(-~1)+(E)[D]+(-~0)+(-~0)+(E)[D]+(-~0)+(-~0)+(E)[D]+(-~0)+(-~0)+(E)[D]+(-~0)+(-~0)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+(-~3)+(-~3)+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+((F)+(C))+(-~1)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~-~1)+(E)[D]+((F)+(C))+((c^_^o)-(c^_^o))+(E)[D]+(-~3)+(-~1)+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+((F)+(C))+(-~3)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+(-~3)+(-~3)+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~3)+(-~1)+(E)[D]+((F)+(C))+(-~0)+(E)[D]+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~-~1)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~1)+(E)[D]+(-~0)+(-~3)+(-~-~1)+(E)[D]+((F)+(C))+((c^_^o)-(c^_^o))+(E)[D]+(-~0)+((F)+(o^_^o))+(-~-~1)+(E)[D]+(-~3)+((c^_^o)-(c^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+(-~0)+((F)+(o^_^o))+(-~0)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+((c^_^o)-(c^_^o))+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+((F)+(o^_^o))+(-~1)+(E)[D]+(-~3)+((c^_^o)-(c^_^o))+(E)[D]+(-~3)+(-~1)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+(-~3)+(-~3)+(E)[D]+(-~0)+(-~3)+((F)+(C))+(E)[D]+(-~0)+((F)+(C))+((F)+(o^_^o))+(E)[D]+((F)+(C))+((F)+(o^_^o))+(E)[D]+(-~0)+((F)+(C))+((F)+(C))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+((c^_^o)-(c^_^o))+(E)[D]+((o^_^o)+(o^_^o)+(c^_^o))+(-~3)+(E)[D]+(-~3)+(-~1)+(E)[D]+((F)+(C))+(-~3)+(E)[D]+(-~3)+((c^_^o)-(c^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~-~1)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~1)+(E)[D]+(-~0)+(-~3)+(-~-~1)+(E)[D]+((F)+(o^_^o))+(-~1)+(E)[D]+(-~3)+((c^_^o)-(c^_^o))+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~-~1)+(E)[D]+(-~0)+((o^_^o)+(o^_^o)+(c^_^o))+(-~1)+(E)[D]+(-~0)+(-~3)+(-~-~1)+(E)[D]+(-~0)+((F)+(C))+(-~3)+(E)[D]+(-~0)+((F)+(C))+(-~0)+(E)[D]+(-~0)+((F)+(C))+((o^_^o)+(o^_^o)+(c^_^o))+(E)[D]+(-~0)+((F)+(C))+(-~-~1)+(E)[D]+(-~0)+((F)+(o^_^o))+((F)+(C))+(E)[D]+((F)+(C))+(-~0)+(E)[D]+((F)+(o^_^o))+(-~-~1)+(E)[D]+(-~0)+((F)+(o^_^o))+((F)+(C))+(E)[D]+((F)+(C))+(-~0)+(E)[D]+((F)+(o^_^o))+(-~-~1)+(E)[B];"""
+    #     code = puzzle[:-1].split(';')
+    #     code[1] = code[1][1:-1]
+    #     var_zero = puzzle[0]
+    #     var_dict = re.search(pat_dicId, puzzle)
+    #     var_dict = var_dict.group(1)
+    #     PATT_BEGIN = "(%s)['_'](" % var_dict
+    #     PATT_END = "%s=/~//**/[\'_\']" % var_zero
+    #     for k, linea in enumerate(code):
+    #         if not linea.startswith(PATT_BEGIN):
+    #             if linea.endswith(PATT_END):
+    #                 linea = linea.replace(PATT_END, "%s='undefined'" % var_zero)
+    #             linea = re.sub(r"\(([A-Z]+)\)", lambda x: x.group(1), linea)
+    #             linea = linea.encode('utf-8')
+    #             varss = re.split(r"(?<=[_a-zA-Z\])])=(?=[^=])",linea)
+    #             value = eval(varss.pop(), codeGlb)
+    #             for var in varss:
+    #                 var = var.replace('(', '').replace(')', '')
+    #                 m = re.match(r"([^\[]+)\[([^\]]+)\]", var)
+    #                 if m:
+    #                     var, key = m.groups()
+    #                     key = eval(key, codeGlb)
+    #                     codeGlb[var][key] = value
+    #                 else:
+    #                     codeGlb[var] = value
+    #         else:
+    #             while re.search(r"-~([0-9]+)", linea):
+    #                 linea = re.sub(r"-~([0-9]+)", lambda x: "%s" % (int(x.group(1)) + 1), linea)
+    #             while re.search(r"\(([A-Z]+)\)", linea):
+    #                 linea = re.sub(r"\(([A-Z]+)\)", lambda x: x.group(1), linea)
+    #             linea = re.sub(r"\([oc]\^_\^o\)", lambda x: "%s" % eval(x.group(), codeGlb), linea)
+    #             while re.search(r"\([^)\]'\[(]+\)", linea):
+    #                 linea = re.sub(r"\([^)\]'\[(]+\)", lambda x: "%s" % eval(x.group(), codeGlb), linea)
+    #             linea = re.sub(r"[A-Z](?=[^\]\[])", lambda x: "%s" % eval(x.group(), codeGlb), linea)
+    #             linea = re.sub(r"E\[[\'_A-Za-z]+\]", lambda x: "%s" % eval(x.group(), codeGlb), linea)
+    #             linea = linea.replace('+', '')
+    #             linea = linea.decode('unicode-escape')
+    #             if linea.find(u'\u01c3') != -1:
+    #                 linea = linea.replace(u'\u01c3', 'oddFun')
+    #                 m = re.search(r'b.toString\(a\+([0-9]+)\)', linea)
+    #                 base = int(m.group(1))
+    #                 linea = re.sub(r"oddFun\(([0-9]+),([0-9]+)\)", lambda x: '"' + intBaseN(int(x.group(2)), base + int(x.group(1))) + '"', linea)
+    #                 linea = re.sub(r'"\+"', lambda x: '', linea)
+    #             functionCode.append(linea)
     # html_unescape_table = dict((v,k) for k, v in html_escape_table.items())
     functionCode[0] = re.sub(r'(\n|\r|\t)+', '', functionCode[0])
     functionCode[0] = prettifyJS(functionCode[0])
@@ -995,3 +1145,4 @@ if __name__ == "__main__":
     #         print mediaUrl
     pass
 
+    "10.10.4?"

@@ -67,7 +67,8 @@ class XbmcAddonIDE(tk.Toplevel):
 
         self.setGUI()
         self.newFile()
-        self.attributes('-zoomed', True)
+        # self.attributes('-zoomed', True)
+        self.attributes('-fullscreen', True)
         self.state("normal")
         fname = '@' + os.path.abspath(r'./images/KodiIDE_icon.xbm')
         self.iconbitmap(fname)
@@ -498,6 +499,8 @@ class XbmcAddonIDE(tk.Toplevel):
         menuOpt = []
         menuOpt.append(('command', 'l=~[];l={ ...','', 2, lambda x='type1': self.deOfuscate(x)))
         menuOpt.append(('command', '_0x12a8=[ ...','', 0, lambda x='type2': self.deOfuscate(x)))
+        menuOpt.append(('command', 'ﾟωﾟﾉ =/｀ｍ´ ） ﾉ~', '', 1, lambda x='type3': self.deOfuscate(x)))
+        menuOpt.append(('command', 'openloadOfuscator', '', 1, lambda x='type4': self.deOfuscate(x)))
         self.makeMenu('design_tools.Ofuscators', menuOpt)
         self.makeMenu('nav_menu_tools.Ofuscators', menuOpt)
 
@@ -573,6 +576,10 @@ class XbmcAddonIDE(tk.Toplevel):
                 content = resolverTools.ofuscator1(content)
             elif tipo == 'type2':
                 content = resolverTools.ofuscator2(content)
+            elif tipo == 'type3':
+                content = resolverTools.transOpenloadPuzzle(content)
+            elif tipo == 'type4':
+                content = resolverTools.openloadOfuscator(content)
         except Exception as e:
             tkMessageBox.showerror('Deofuscator Error', e)
         else:
@@ -1418,5 +1425,6 @@ if __name__ == "__main__":
         if bflag: ideSettings.save()
         with SplashScreen(Root, os.path.abspath(r'./images/KodiIDE_logo.jpg'), 5.0 ):
             mainWin = XbmcAddonIDE()
+        # mainWin = XbmcAddonIDE()
         Root.wait_window(mainWin)
 

@@ -65,7 +65,7 @@ class RegexpBar(tk.Frame):
         self.dropDownFiler = callbckFunc
         
     def setGUI(self):
-        self.customFont = tkFont.Font(family = 'Consolas', size = 18)
+        self.customFont = tkFont.Font(family = 'Consolas', size = 14)
         
         frame1 = tk.Frame(self)
         frame1.pack(fill = tk.X)
@@ -125,7 +125,7 @@ class RegexpBar(tk.Frame):
 
         frame15 = tk.Frame(self)
         frame15.pack(fill = tk.X)
-        label = tk.Label(frame15, text = "Compilation Flags:", font = self.customFont)
+        label = tk.Label(frame15, text = " Flags: ", font = self.customFont)
         label.pack(side = tk.LEFT)
 
         self.chkVar = {}

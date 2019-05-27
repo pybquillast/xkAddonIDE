@@ -956,7 +956,7 @@ class scrolledFrame(settContainer):
 
     def __init__(self, master, settings, selPane):
         self.settings = {}
-        settContainer.__init__(self, master, label='')
+        settContainer.__init__(self, master, label='', scrolled='true')
         self.pack_forget()
         self.pack(side=tk.TOP, fill=tk.BOTH, expand=tk.YES)
         self.category = selPane.get('label')

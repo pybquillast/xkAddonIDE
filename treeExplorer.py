@@ -439,10 +439,11 @@ class treeExplorer(FilteredTree):
             else:
                 newDependency = os.path.join(addonsPath, newDependency)
 
-        if not os.path.exists(newDependency):
-            newDependency = tkFileDialog.askdirectory(title = newDependency + 'not found, please set new dependency', initialdir = addonsPath, mustexist=True)
+        bFlag = os.path.exists(newDependency)
+        # if not os.path.exists(newDependency):
+        #     newDependency = tkFileDialog.askdirectory(title = newDependency + 'not found, please set new dependency', initialdir = addonsPath, mustexist=True)
 
-        if not newDependency: return
+        if not bFlag: return
         xmlfile = ET.parse(os.path.join(newDependency,'addon.xml')).getroot()
         addonVer = xmlfile.get('version')
         source = os.path.basename(newDependency)

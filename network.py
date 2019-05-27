@@ -32,7 +32,6 @@ MOBILE_BROWSER = "Mozilla/5.0 (Linux; U; android 4.0.3; ko-kr; LG-L160L Build/IM
 DESKTOP_BROWSER = "Mozilla/5.0 (Windows NT 6.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.80 Safari/537.36"
 
 
-
 def createParser():
     parser = optparse.OptionParser()
     parserdefaults = {'header': '{}', 'debug': False, 'referer': None, 'cookie_jar': None, 'post302': False, 'proxy': None, 'remote_header_name': False, 'proxy_auth': 'basic', 'req_method': '', 'create_dirs': False, 'location': False, 'include': False, 'form': '', 'cookie': None, 'user': None, 'post301': False, 'remote_name': False, 'data': '[]', 'auth_method': 'basic', 'proxy_user': None, 'url': None, 'data_binary': None, 'data_raw': None, 'user_agent': None, 'output': None, 'data_urlencode': None, 'post303': False}
@@ -84,7 +83,8 @@ def createParser():
     parser.add_option('--post', action = 'store_const', const = 'POST', dest = 'req_method')
     
     return parser
-    
+
+
 def dataProc(option, opt_str, value, parser):
     if opt_str in ['-d', '--data']:
         if value.startswith('@'):
@@ -117,6 +117,7 @@ def dataProc(option, opt_str, value, parser):
     parser.values.data = json.dumps(data)
     pass
 
+
 def formProc(option, opt_str, value, parser):
     BOUNDARY = 6*'-' + mimetools.choose_boundary() if not parser.values.form else parser.values.form.partition('\n')[0]
     items = {}
@@ -147,6 +148,7 @@ def formProc(option, opt_str, value, parser):
         if items.has_key('type'): joinBlk += '\r\nContent-Type: {type}'
         joinBlk += '\r\n\r\n{value}\r\n'
         parser.values.form += joinBlk.format(**items)
+
 
 def headerProc(option, opt_str, value, parser):
     if opt_str in ['-A', '--user-agent']:
@@ -293,7 +295,8 @@ class network:
     
     
     def getOpener(self, values):
-        opener_handlers = [urllib2.HTTPHandler(debuglevel = values.debug)]
+        # opener_handlers = [urllib2.HTTPHandler(debuglevel = values.debug), HTTPErrorProcessor(debuglevel = values.debug)]
+        opener_handlers = [urllib2.HTTPHandler(debuglevel = values.debug), HTTPErrorProcessor()]
         if hasattr(httplib, 'HTTPS'):
             context = ssl._create_unverified_context(purpose=ssl.Purpose.SERVER_AUTH,
                                                      cafile=certifi.where())
@@ -383,7 +386,8 @@ class network:
             setattr(request, 'get_method', lambda: values.req_method)
         return request
         pass
-    
+
+
 class LogNetFlow:
     SEPARATOR = '\n' + 80*'='
     HEAD_SEP = '\n' + 80*'-'
@@ -427,7 +431,8 @@ class LogNetFlow:
     
     def __str__(self):
         return self.getNetFlow()        
-    
+
+
 class LogHandler(urllib2.BaseHandler):
     '''
     Esta clase permitirá la implementación del opener para incluir suiches redirecciones, logger
@@ -508,8 +513,7 @@ class LogHandler(urllib2.BaseHandler):
         else:
             raise urllib2.URLError('Redirection not allowed')
         pass
-    
-    
+
 
 class netHTTPRedirectHandler(urllib2.HTTPRedirectHandler):
     def __init__(self, location = True, include = None, postSwitches = None):
@@ -541,6 +545,23 @@ def unCompressMethods(data, compMethod):
         gzipper.close()
     return data
 
+
+class HTTPErrorProcessor(urllib2.HTTPErrorProcessor):
+    """Process HTTP error responses."""
+    handler_order = 1000  # after all other processing
+
+    def http_response(self, request, response):
+        code, msg, hdrs = response.code, response.msg, response.info()
+
+        # According to RFC 2616, "2xx" code indicates that the client's
+        # request was successfully received, understood, and accepted.
+        if not (200 <= code < 300 or code in [429, 503]):
+            response = self.parent.error(
+                'http', request, response, code, msg, hdrs)
+
+        return response
+
+    https_response = http_response
 
 if __name__ == '__main__':
     import CustomRegEx

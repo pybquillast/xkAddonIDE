@@ -324,7 +324,8 @@ class ExtRegexParser(HTMLParser):
 
     def handle_endtag(self, tag):
         posini, posfin = self.getSpan('</%s>' % tag)
-        rootTag, sep = self.stackPath.rpartition('.' + tag)[:2]
+        dmy = self.stackPath + '.'
+        rootTag, sep = dmy.rpartition('.%s.' % tag)[:2]
         if sep:
             self.stackPath = rootTag
             while 1:
@@ -339,7 +340,7 @@ class ExtRegexParser(HTMLParser):
 
     def handle_startendtag(self, tag, attrs):
         posini, posfin = self.getSpan(self.get_starttag_text())
-        self.stackPath += '.' + tag
+        # self.stackPath += '.' + tag
         self.tagList.append([(posini, posfin), tag, -1])
 
     def storeDataStr(self, dataIn):
