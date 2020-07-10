@@ -243,12 +243,15 @@ def makeXbmcMenu(addon_handle, base_url, menuContent):
                     break
                 else:
                     if not addonInfo['imdb_id'] and media == 'tvshow':
-                        showList = tv.get_matching_shows(name)
+                        try:
+                            showList = tv.get_matching_shows(name)
+                        except:
+                            showList = None
                         if showList:
                             kwargs.update(zip(['tmdb_id', 'name','imdb_id'], showList[0]))
                             urlTags['imdb_id'] = kwargs['imdb_id']
                             urlTags['name'] = kwargs['name']
-                        addonInfo = mg.get_meta(media, **kwargs)
+                            addonInfo = mg.get_meta(media, **kwargs)
                     otherParam['labeldef'] = name + ' (' + str(addonInfo['year']) + ')'
 
             elif media in ['season', 'episode']:

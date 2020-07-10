@@ -29,6 +29,25 @@ def getMediaUrl(videoUrl):
 
 """----------------- VIGENTES -----------------"""
 
+def fembed(videoId, headers = None):
+    headers = headers or {}
+    headers['User-Agent'] = DESKTOP_BROWSER
+    encodedHeaders = urllib.urlencode(headers)
+    referer = 'https://www.%s/api/source/%s' % ('fembed.live', videoId)
+    url = referer + '<post>r=<headers>%s' % encodedHeaders
+    content = openUrl(url, noSSL=True)[1]
+    answ = json.loads(content)
+    if not answ['success']:
+        raise Exception("success = False; Not a valid fembed url")
+    sources = [(item['label'], item['file']) for item in answ['data'] if item['type'] == 'mp4']
+    url = sources[-1][1]
+    if 'redirector' in url:
+        referer = url
+        url = openUrl(url, validate=True, noSSL=True)
+    encodedHeaders = urllib.urlencode({'User-Agent': DESKTOP_BROWSER, 'Referer':referer})
+    urlStr = '%s|%s' % (url, encodedHeaders)
+    return urlStr
+
 def jwplayerFamilyResolver(domain, videoId, headers = None, wait=0, hasForm=True, isPacked=True):
     headers = headers or {}
     headers['User-Agent'] = DESKTOP_BROWSER
@@ -52,10 +71,11 @@ def jwplayerFamilyResolver(domain, videoId, headers = None, wait=0, hasForm=True
     return urlStr
 
 def clipwatching(videoId, headers=None):
-    return jwplayerFamilyResolver('vidtodoo.com', videoId, headers, hasForm=False, isPacked=False)
+    return jwplayerFamilyResolver('clipwatching.com', videoId, headers, hasForm=False, isPacked=False)
 
 def vidoza(videoId, headers = None):
-    return nowvideoFamilyResolver('clipwatching.com', videoId, headers, hasForm=False, isPacked=True)
+    videoId += '.html'
+    return nowvideoFamilyResolver('vidoza.net', videoId, headers, hasForm=False)
 
 def flashx(videoId, headers=None):
     return jwplayerFamilyResolver('flashx.tv', videoId + '.html', headers, wait=5)
@@ -1070,71 +1090,73 @@ def openload_20170108(videoId, headers = None):
 
 
 if __name__ == "__main__":
-    headers = {'Referer': 'http://www.novelashdgratis.tv/ver/hasta-que-te-conoci-capitulo-2/'}
-    urllib.urlencode(headers)
-    host, videoId = "vidtodo", "11m57akw8zqt"
-    host, videoId = "vidtodo", "m1mkw0zinjha"
-    host, videoId = "vidtodo", "w5g6p73opdx8"
-    host, videoId = "streamin", "ndvfc99v9yhv"
-    host, videoId = "streamin", "vvr2vs8v0wz9"
-    host, videoId = "thevideo", "c73uuvgj5j3u"
-    host, videoId = "vidup", "1zl37r0r8jns"
-    host, videoId = "vidto", "uj7uxhncf296"
-    host, videoId = "streamin", "r8fwbgwaa88f"
-    host, videoId = "estream", "92caigsdoupc"
-    videourl = r'http://vidzi.tv/ndlcdtzu0vwi.html'
-    videourl = r'http://www.cloudtime.to/video/91b290befe202'
-    videourl = r'https://www.movshare.net/video/6005763e32c44'
-    videourl = r'http://www.nowvideo.sx/video/2c9b7a373c917'
-
-    videourl = ('play', 'jpupx5i0x971')
-    videourl = ('powvideo', 'wxoyz2jxxdd3')
-    videourl = ('gamo', 'mf3gp128muo8')
-    host, videoId = "vidtodo", "11m57akw8zqt"
-    videourl = (host, videoId)
-    videourl = r'https://www.flashx.tv/kt9zst96ceyj.html'
-    videourl = r"http://watchers.to/qg97qknhyc72.html"
-    videourl = r"http://nosvideo.com/qlwibotc8q4d"
-    videourl = r'https://openload.co/f/gmJ4A1DWVRA/Seth.Meyers.2017.03.13.Glenn.Close.XviD-AFG.mp4'
-    videourl = r'http://vidup.me/embed-ycbm4tu1qcsv-600x360.html'
-    videourl = r'https://thevideo.me/embed-eyz4l8qcsnoe-600x360.html'
-    videourl = r'http://vidtodo.com/czgif9fo4j3m'
+    # headers = {'Referer': 'http://www.novelashdgratis.tv/ver/hasta-que-te-conoci-capitulo-2/'}
+    # urllib.urlencode(headers)
+    # host, videoId = "vidtodo", "11m57akw8zqt"
+    # host, videoId = "vidtodo", "m1mkw0zinjha"
+    # host, videoId = "vidtodo", "w5g6p73opdx8"
+    # host, videoId = "streamin", "ndvfc99v9yhv"
+    # host, videoId = "streamin", "vvr2vs8v0wz9"
+    # host, videoId = "thevideo", "c73uuvgj5j3u"
+    # host, videoId = "vidup", "1zl37r0r8jns"
+    # host, videoId = "vidto", "uj7uxhncf296"
+    # host, videoId = "streamin", "r8fwbgwaa88f"
+    # host, videoId = "estream", "92caigsdoupc"
+    # videourl = r'http://vidzi.tv/ndlcdtzu0vwi.html'
+    # videourl = r'http://www.cloudtime.to/video/91b290befe202'
+    # videourl = r'https://www.movshare.net/video/6005763e32c44'
+    # videourl = r'http://www.nowvideo.sx/video/2c9b7a373c917'
+    #
+    # videourl = ('play', 'jpupx5i0x971')
+    # videourl = ('powvideo', 'wxoyz2jxxdd3')
+    # videourl = ('gamo', 'mf3gp128muo8')
+    # host, videoId = "vidtodo", "11m57akw8zqt"
+    # videourl = (host, videoId)
+    # videourl = r'https://www.flashx.tv/kt9zst96ceyj.html'
+    # videourl = r"http://watchers.to/qg97qknhyc72.html"
+    # videourl = r"http://nosvideo.com/qlwibotc8q4d"
+    # videourl = r'https://openload.co/f/gmJ4A1DWVRA/Seth.Meyers.2017.03.13.Glenn.Close.XviD-AFG.mp4'
+    # videourl = r'http://vidup.me/embed-ycbm4tu1qcsv-600x360.html'
+    # videourl = r'https://thevideo.me/embed-eyz4l8qcsnoe-600x360.html'
+    # videourl = r'http://vidtodo.com/czgif9fo4j3m'
+    videourl = r'https://vidoza.net/tg5gf9wr6vup.html'
+    videourl = r'https://clipwatching.com/1mfv9b3pbzac/Elementary.S07E12.HDTV.x264-RBB.mp4.html'
     resp = getMediaUrl(videourl)
-
-    resolvers = [
-         ('cloudtime.to', 'http://www.cloudtime.to/video/91b290befe202'),
-         ('movshare.net', 'https://www.movshare.net/video/6005763e32c44'),
-         ('nowvideo.sx', 'http://www.nowvideo.sx/video/2c9b7a373c917'),
-
-         ('thevideo.me', 'http://thevideo.me/c73uuvgj5j3u'),
-         ('thevideo.me', 'http://thevideo.me/h9icqvo8rxqa'),
-         ('thevideo.me', 'http://thevideo.me/v28fczyea10t'),
-         ('vidup.me', 'http://vidup.me/1zl37r0r8jns'),
-         ('vidup.me', 'http://vidup.me/w3ig80dle3bt'),
-         ('vidtodo.com', 'http://vidtodo.com/11m57akw8zqt'),
-         ('vidtodo.com', 'http://vidtodo.com/m1mkw0zinjha'),
-         ('vidtodo.com', 'http://vidtodo.com/w5g6p73opdx8'),
-         ('streamin.to', 'http://streamin.to/ndvfc99v9yhv'),
-         ('streamin.to', 'http://streamin.to/r8fwbgwaa88f'),
-         ('streamin.to', 'http://streamin.to/vvr2vs8v0wz9'),
-         ('openload.co',
-          'https://openload.co/f/t0_bv-j97go/Taboo.UK.S01E03.HDTV.x264-ORGANiC.mp4'),
-         ('openload.co',
-          'https://openload.co/f/yDX5c21nkkM/Taboo.UK.S01E03.HDTV.x264-ORGANiC.mp4'),
-         ('vidto.me', 'http://vidto.me/6tndjg2pxf7e.html'),     # obsoleto
-         ('vidto.me', 'http://vidto.me/bxho44z59y5t.html'),
-         ('vidto.me', 'http://vidto.me/uj7uxhncf296.html'),
-         ('estream.to', 'https://estream.to/92caigsdoupc.html'),
-         ('estream.to', 'https://estream.to/ls0knfs1t4o8.html'),
-         ('estream.to', 'https://estream.to/vr9i15syg0c8.html'),
-
-
-
-         ('vidzi.tv', 'http://vidzi.tv/2l2jx0sghqek.html'),
-         ('vidzi.tv', 'http://vidzi.tv/ndlcdtzu0vwi.html'),
-         ('vidzi.tv', 'http://vidzi.tv/ptsbcl1ftqyz.html'),
-         ('vshare.eu', 'http://vshare.eu/be315qikmrxx.htm'),
-         ('vshare.eu', 'http://vshare.eu/idel1ino0k0f.htm')]
+    pass
+    # resolvers = [
+    #      ('cloudtime.to', 'http://www.cloudtime.to/video/91b290befe202'),
+    #      ('movshare.net', 'https://www.movshare.net/video/6005763e32c44'),
+    #      ('nowvideo.sx', 'http://www.nowvideo.sx/video/2c9b7a373c917'),
+    #
+    #      ('thevideo.me', 'http://thevideo.me/c73uuvgj5j3u'),
+    #      ('thevideo.me', 'http://thevideo.me/h9icqvo8rxqa'),
+    #      ('thevideo.me', 'http://thevideo.me/v28fczyea10t'),
+    #      ('vidup.me', 'http://vidup.me/1zl37r0r8jns'),
+    #      ('vidup.me', 'http://vidup.me/w3ig80dle3bt'),
+    #      ('vidtodo.com', 'http://vidtodo.com/11m57akw8zqt'),
+    #      ('vidtodo.com', 'http://vidtodo.com/m1mkw0zinjha'),
+    #      ('vidtodo.com', 'http://vidtodo.com/w5g6p73opdx8'),
+    #      ('streamin.to', 'http://streamin.to/ndvfc99v9yhv'),
+    #      ('streamin.to', 'http://streamin.to/r8fwbgwaa88f'),
+    #      ('streamin.to', 'http://streamin.to/vvr2vs8v0wz9'),
+    #      ('openload.co',
+    #       'https://openload.co/f/t0_bv-j97go/Taboo.UK.S01E03.HDTV.x264-ORGANiC.mp4'),
+    #      ('openload.co',
+    #       'https://openload.co/f/yDX5c21nkkM/Taboo.UK.S01E03.HDTV.x264-ORGANiC.mp4'),
+    #      ('vidto.me', 'http://vidto.me/6tndjg2pxf7e.html'),     # obsoleto
+    #      ('vidto.me', 'http://vidto.me/bxho44z59y5t.html'),
+    #      ('vidto.me', 'http://vidto.me/uj7uxhncf296.html'),
+    #      ('estream.to', 'https://estream.to/92caigsdoupc.html'),
+    #      ('estream.to', 'https://estream.to/ls0knfs1t4o8.html'),
+    #      ('estream.to', 'https://estream.to/vr9i15syg0c8.html'),
+    #
+    #
+    #
+    #      ('vidzi.tv', 'http://vidzi.tv/2l2jx0sghqek.html'),
+    #      ('vidzi.tv', 'http://vidzi.tv/ndlcdtzu0vwi.html'),
+    #      ('vidzi.tv', 'http://vidzi.tv/ptsbcl1ftqyz.html'),
+    #      ('vshare.eu', 'http://vshare.eu/be315qikmrxx.htm'),
+    #      ('vshare.eu', 'http://vshare.eu/idel1ino0k0f.htm')]
 
     # for domain, videoUrl in resolvers:
     #     try:
@@ -1145,4 +1167,4 @@ if __name__ == "__main__":
     #         print mediaUrl
     pass
 
-    "10.10.4?"
+    # "10.10.4?"

@@ -1180,7 +1180,7 @@ class PythonEditor(tk.Frame):
     def setContent(self,text):
         self.textw.delete('1.0','end')
         if text:
-            self.textw.insert('1.0',text)
+            self.textw.insert('1.0',text.encode('utf-8'))
 
     def selDel(self, event = None):
         textw = self.textw

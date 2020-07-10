@@ -1,23 +1,15 @@
 # -*- coding: utf-8 -*-
-from StringIO import StringIO
 import json
 import re
-import sys
-from xml.dom.pulldom import DOMEventStream
-from xml.sax.saxutils import escape, unescape
 
 import CustomRegEx
 import string
 import urlparse
-# import basicFunc
 import cookielib
 import urllib2
-import base64
 import urllib
 import time
 import collections
-
-import operator as op
 
 MOBILE_BROWSER = "Mozilla/5.0 (Linux; U; android 4.0.3; ko-kr; LG-L160L Build/IML74K) AppleWebkit/534.30 (KHTML, like Gecko) Version/4.0 Mobile Safari/534.30"
 DESKTOP_BROWSER = "Mozilla/5.0 (Windows NT 6.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/47.0.2526.80 Safari/537.36"
@@ -30,7 +22,7 @@ html_escape_table = {
                         "<": "&lt;",
                     }
 
-def openUrl(urlToOpen, validate = False):
+def openUrl(urlToOpen, validate = False, noSSL = False):
     headers = {'User-Agent':'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-GB; rv:1.9.0.3) Gecko/2008092417 Firefox/3.0.3'}
 
     urlToOpen, custHdr = urlToOpen.partition('<headers>')[0:3:2]
@@ -44,7 +36,12 @@ def openUrl(urlToOpen, validate = False):
     data = data or None
 
     cj = cookielib.LWPCookieJar()
-    opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
+    handlers = [urllib2.HTTPCookieProcessor(cj)]
+    if noSSL:
+        import ssl
+        gcontext = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+        handlers.append(urllib2.HTTPSHandler(context=gcontext))
+    opener = urllib2.build_opener(*handlers)
     try:
         req = urllib2.Request(urlToOpen, data, headers)
         url = opener.open(req)
